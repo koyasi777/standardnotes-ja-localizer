@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.0
+// @version      1.6.1
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -9,7 +9,7 @@
 // @license      MIT
 // @homepageURL  https://github.com/koyasi777/standard-notes-ja-localizer
 // @supportURL   https://github.com/koyasi777/standard-notes-ja-localizer/issues
-// @icon         https://app.standardnotes.com/favicon/apple-touch-icon.png
+// @icon         https://app.standardnotes.com/favicon/favicon-32x32.png
 // ==/UserScript==
 
 (function () {
