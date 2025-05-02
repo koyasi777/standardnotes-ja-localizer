@@ -9,7 +9,6 @@
 // @license      MIT
 // @homepageURL  https://github.com/koyasi777/standard-notes-ja-localizer
 // @supportURL   https://github.com/koyasi777/standard-notes-ja-localizer/issues
-// @icon         https://app.standardnotes.com/favicon.ico
 // ==/UserScript==
 
 (function () {
