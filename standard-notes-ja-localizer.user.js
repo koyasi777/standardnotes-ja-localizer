@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.7.0
+// @version      1.7.1
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -119,7 +119,7 @@
     const map = {
       "Views": "ビュー",
       "Notes": "ノート一覧",
-      "Files": "添付ファイル",
+      "Files": "ファイル",
       "Starred": "お気に入り",
       "Archived": "アーカイブ",
       "Trash": "ゴミ箱",
@@ -1130,7 +1130,7 @@
       "Archived": "アーカイブ",
       "Trash": "ゴミ箱",
       "Untagged": "タグなし",
-      "Files": "添付ファイル",
+      "Files": "ファイル",
       "Notes": "ノート一覧"
     };
 
