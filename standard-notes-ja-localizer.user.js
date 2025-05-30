@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.3
+// @version      1.6.4
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -288,7 +288,6 @@
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
-
 
   const localizeChallengeModal = () => {
     const map = {
@@ -839,6 +838,131 @@
     translate();
   };
 
+  // --- 単位、曜日、月の辞書 ---
+  const enToJaUnits = {
+    'words': '単語',
+    'characters': '文字',
+    'paragraphs': '段落',
+  };
+  const enToJaWeek = {
+    'Sun': '日', 'Mon': '月', 'Tue': '火', 'Wed': '水', 'Thu': '木', 'Fri': '金', 'Sat': '土',
+  };
+  const enToNumMonth = {
+    'Jan': '1', 'Feb': '2', 'Mar': '3', 'Apr': '4', 'May': '5', 'Jun': '6',
+    'Jul': '7', 'Aug': '8', 'Sep': '9', 'Oct': '10', 'Nov': '11', 'Dec': '12',
+    '1月':'1', '2月':'2', '3月':'3', '4月':'4', '5月':'5', '6月':'6', '7月':'7', '8月':'8', '9月':'9', '10月':'10', '11月':'11', '12月':'12',
+  };
+  const jaWeekShort = { '日':'日', '月':'月', '火':'火', '水':'水', '木':'木', '金':'金', '土':'土' };
+
+  // --- 1: words/characters/paragraphs行の徹底日本語化 ---
+  function localizeStatsLine() {
+    const translate = () => {
+      document.querySelectorAll('.select-text .mb-1, .select-text > div').forEach(div => {
+        // [A] まずstatsっぽい行だけ
+        if (!div.textContent.match(/\b(words?|characters?|paragraphs?)\b/)) return;
+
+        // [B] ノードを全て走査して内容合成
+        let buffer = '';
+        div.childNodes.forEach(node => {
+          buffer += node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
+        });
+
+        // [C] 「数字+単位」を抽出して日本語化
+        let jaLine = buffer
+          .split(/[\u00b7·,・]/)
+          .map(part => {
+            const m = part.trim().match(/^(\d+)\s*(words?|characters?|paragraphs?)$/);
+            if (m) {
+              const num = m[1], unit = m[2];
+              return `${num}${enToJaUnits[unit] ?? unit}`;
+            }
+            return part.trim();
+          })
+          .join('・');
+
+        // [D] 表示が異なる場合のみ上書き
+        if (div.textContent.trim() !== jaLine) {
+          div.innerHTML = jaLine;
+        }
+      });
+    };
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
+  // --- 2: 日付・時刻などfooterの日本語化 ---
+  function localizeNoteFooterInfoExtra() {
+    function translateTextNodeContent(node) {
+      let text = node.nodeValue;
+      // 時間系
+      text = text.replace(/<\s*(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?)/g, (m, num, unit) => {
+        const dict = {
+          second: '秒', seconds: '秒',
+          minute: '分', minutes: '分',
+          hour: '時間', hours: '時間',
+          day: '日', days: '日',
+          week: '週間', weeks: '週間',
+        };
+        return `< ${num}${dict[unit] || unit}`;
+      });
+      text = text.replace(/(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?)/g, (m, num, unit) => {
+        const dict = {
+          second: '秒', seconds: '秒',
+          minute: '分', minutes: '分',
+          hour: '時間', hours: '時間',
+          day: '日', days: '日',
+          week: '週間', weeks: '週間',
+        };
+        return `${num}${dict[unit] || unit}`;
+      });
+      text = text.replace(/less than a minute/i, "1分未満");
+      node.nodeValue = text;
+    }
+
+    function convertDateFormat(str) {
+      // ex: "Fri May 30 2025 14:01:45" や "金 5月 30 2025 14:01:45"
+      const dateRegex = /\b(?<wday>(Sun|Mon|Tue|Wed|Thu|Fri|Sat|日|月|火|水|木|金|土))\b\s+(?<month>(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]+月))\s+(?<day>\d{1,2})\s+(?<year>\d{4})/;
+      const match = str.match(dateRegex);
+      if (match && match.groups) {
+        const { wday, month, day, year } = match.groups;
+        let jaWday = enToJaWeek[wday] || jaWeekShort[wday] || wday;
+        let numMonth = enToNumMonth[month] || month.replace('月','');
+        let numDay = day;
+        let jaDate = `${year}/${numMonth}/${numDay} (${jaWday})`;
+        // 後ろに時刻もあれば追加
+        let timeMatch = str.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/);
+        if (timeMatch) jaDate += ' ' + timeMatch[0];
+        return jaDate;
+      }
+      return str;
+    }
+
+    const translate = () => {
+      document.querySelectorAll('.select-text .mb-1, .select-text > div').forEach(div => {
+        // [1] stats lineはlocalizeStatsLineでやるのでスキップ
+        if (div.textContent.match(/\b(words?|characters?|paragraphs?)\b/)) return;
+        div.childNodes.forEach(child => {
+          if (child.nodeType === Node.TEXT_NODE) {
+            translateTextNodeContent(child);
+            let newText = convertDateFormat(child.nodeValue);
+            if (child.nodeValue !== newText) child.nodeValue = newText;
+          }
+          if (child.nodeType === Node.ELEMENT_NODE) {
+            child.childNodes.forEach(grandchild => {
+              if (grandchild.nodeType === Node.TEXT_NODE) {
+                translateTextNodeContent(grandchild);
+                let newText = convertDateFormat(grandchild.nodeValue);
+                if (grandchild.nodeValue !== newText) grandchild.nodeValue = newText;
+              }
+            });
+          }
+        });
+      });
+    };
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
   // メイン監視（フォントとEnter制御）
   new MutationObserver(() => {
     applyEditorStyle();
@@ -866,4 +990,6 @@
   localizeListedPanel();
   localizeHelpAndFeedbackPanel();
   localizeTagContextMenu();
+  localizeStatsLine();
+  localizeNoteFooterInfoExtra();
 })();
