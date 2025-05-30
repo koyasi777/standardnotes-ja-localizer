@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.4
+// @version      1.6.5
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -963,6 +963,46 @@
     translate();
   }
 
+  function localizeLinkPopover() {
+    const map = {
+      "Search items to link...": "リンクする項目を検索...",
+      "Linked Files": "リンク済みファイル",
+      "Linked Tags": "リンク済みタグ",
+      "Upload and link file(s)": "ファイルをアップロードしてリンク",
+      "Unlinked": "未リンク",
+      "Linked": "リンク済み",
+      "Create & add tag": "タグを作成して追加",
+    };
+
+    const translate = () => {
+      // 1. ポップオーバー内だけを確実に抽出
+      document.querySelectorAll('[data-popover]').forEach(popover => {
+        // placeholder属性
+        popover.querySelectorAll('input[placeholder]').forEach(input => {
+          const p = input.placeholder.trim();
+          if (map[p]) input.placeholder = map[p];
+        });
+        // テキストノード
+        popover.querySelectorAll('div, button, span, label').forEach(el => {
+          el.childNodes.forEach(child => {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const raw = child.nodeValue.trim();
+              if (map[raw]) child.nodeValue = map[raw];
+            }
+          });
+        });
+        // aria-label属性
+        popover.querySelectorAll('[aria-label]').forEach(el => {
+          const label = el.getAttribute('aria-label');
+          if (map[label]) el.setAttribute('aria-label', map[label]);
+        });
+      });
+    };
+
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
   // メイン監視（フォントとEnter制御）
   new MutationObserver(() => {
     applyEditorStyle();
@@ -992,4 +1032,5 @@
   localizeTagContextMenu();
   localizeStatsLine();
   localizeNoteFooterInfoExtra();
+  localizeLinkPopover();
 })();
