@@ -1,4 +1,4 @@
-# Standard Notes 日本語化 + IME修正 ✨
+# Standard Notes 日本語化 + IME修正
 
 ## 📌 概要
 
