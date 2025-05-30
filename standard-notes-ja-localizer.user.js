@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.1
+// @version      1.6.2
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -215,31 +215,44 @@
       "Move to trash": "ゴミ箱に移動",
       "Listed actions": "アクション一覧",
       "Spellcheck": "スペルチェック",
+      "Restore": "元に戻す",
+      "Delete permanently": "完全に削除",
+      "Empty Trash": "ゴミ箱を空にする",
     };
 
     const translate = () => {
-      document.querySelectorAll('menu [role="menuitem"], [role="menuitemcheckbox"]').forEach(button => {
-        button.childNodes.forEach(child => {
-          if (child.nodeType === Node.TEXT_NODE) {
-            const raw = child.nodeValue.trim();
-            if (map[raw]) child.nodeValue = map[raw];
-          } else if (child.nodeType === Node.ELEMENT_NODE) {
-            // さらに TextNode を持つ span や div の中身もチェック
-            child.childNodes.forEach(grandchild => {
-              if (grandchild.nodeType === Node.TEXT_NODE) {
-                const raw = grandchild.nodeValue.trim();
-                if (map[raw]) grandchild.nodeValue = map[raw];
-              }
-            });
-          }
+      // ボタン要素＋danger系span/divも含めて走査
+      document.querySelectorAll('menu [role="menuitem"], [role="menuitemcheckbox"], span.text-danger, div.text-danger')
+        .forEach(button => {
+          button.childNodes.forEach(child => {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const raw = child.nodeValue.trim();
+              if (map[raw]) child.nodeValue = map[raw];
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+              child.childNodes.forEach(grandchild => {
+                if (grandchild.nodeType === Node.TEXT_NODE) {
+                  const raw = grandchild.nodeValue.trim();
+                  if (map[raw]) grandchild.nodeValue = map[raw];
+                }
+              });
+            }
+          });
+          // さらに、span/div/button自身のtextContentが厳密一致した場合は全置換（特にEmpty Trash用）
+          if (map[button.textContent.trim()]) button.textContent = map[button.textContent.trim()];
         });
+
+      // notes in Trash の件数対応
+      document.querySelectorAll('.text-xs').forEach(span => {
+        const match = span.textContent.trim().match(/^(\d+)\s+notes in Trash$/);
+        if (match) {
+          span.textContent = `${match[1]} 件のノートがゴミ箱内にあります`;
+        }
       });
     };
 
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
-
 
   const localizeNoteFooterInfo = () => {
     const map = {
@@ -304,7 +317,6 @@
     translate();
   };
 
-
   const localizeAccountMenu = () => {
     const map = {
       "Account": "アカウント",
@@ -330,7 +342,6 @@
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
-
 
   const localizeQuickSettingsMenu = () => {
     const map = {
