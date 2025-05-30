@@ -1,6 +1,6 @@
 // ==UserScript==
-// @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.7
+// @name         Standard Notes 日本語化 & IME修正
+// @version      1.6.8
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -1079,6 +1079,49 @@
     translate();
   }
 
+  function localizeMoveToTrashModal() {
+    const map = {
+      "Move to Trash": "ゴミ箱に移動",
+      "Are you sure you want to move": "本当に移動しますか？",
+      "to the trash?": "をゴミ箱に移動してもよろしいですか？",
+      "Cancel": "キャンセル",
+      "Confirm": "確認",
+    };
+
+    const translate = () => {
+      document.querySelectorAll('.sk-modal-content').forEach(modal => {
+        // タイトル
+        modal.querySelectorAll('.font-bold.text-lg').forEach(el => {
+          // "Move to Trash"だけをピンポイント
+          if (el.textContent.trim() === "Move to Trash") {
+            el.textContent = map["Move to Trash"];
+          }
+        });
+
+        // 質問文
+        modal.querySelectorAll('.sk-p').forEach(p => {
+          // ex: Are you sure you want to move 'test' to the trash?
+          const raw = p.textContent.trim();
+          const m = raw.match(/^Are you sure you want to move ['‘’「」](.+)['‘’「」] to the trash\?$/)
+                || raw.match(/^Are you sure you want to move (.+) to the trash\?$/);
+          if (m) {
+            // ノート名を残す
+            p.textContent = `「${m[1]}」${map["to the trash?"]}`;
+          }
+        });
+
+        // ボタン
+        modal.querySelectorAll('.sk-label').forEach(div => {
+          const raw = div.textContent.trim();
+          if (map[raw]) div.textContent = map[raw];
+        });
+      });
+    };
+
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
   // メイン監視（フォントとEnter制御）
   new MutationObserver(() => {
     applyEditorStyle();
@@ -1110,4 +1153,5 @@
   localizeNoteFooterInfoExtra();
   localizeLinkPopover();
   localizeEditorTitleBar();
+  localizeMoveToTrashModal();
 })();
