@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.6
+// @version      1.6.7
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -1006,6 +1006,79 @@
     translate();
   }
 
+  function localizeEditorTitleBar() {
+    const map = {
+      "Link tags, notes, files...": "タグ・ノート・ファイルをリンク...",
+      "Link tags, notes or files": "タグ・ノート・ファイルをリンク",
+      "Create & add tag": "タグを作成して追加",
+    };
+
+    // .note-view-linking-container配下 で “特定span”以外
+    const translate = () => {
+      // エディタ上部バー
+      const titleBar = document.querySelector('#editor-title-bar');
+      if (titleBar) {
+        titleBar.querySelectorAll('input[placeholder]').forEach(input => {
+          const p = input.placeholder.trim();
+          if (map[p]) input.placeholder = map[p];
+        });
+        titleBar.querySelectorAll('label, [aria-label], [title]').forEach(el => {
+          if (el.hasAttribute('aria-label')) {
+            const label = el.getAttribute('aria-label');
+            if (map[label]) el.setAttribute('aria-label', map[label]);
+          }
+          if (el.hasAttribute('title')) {
+            const t = el.getAttribute('title');
+            if (map[t]) el.setAttribute('title', map[t]);
+          }
+          el.childNodes.forEach(child => {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const raw = child.nodeValue.trim();
+              if (map[raw]) child.nodeValue = map[raw];
+            }
+          });
+        });
+      }
+
+      // note-view-linking-container 限定
+      document.querySelectorAll('.note-view-linking-container').forEach(container => {
+        // 除外：inline-flex.bg-contrast.text-text配下のspan
+        const exclusionSpans = Array.from(container.querySelectorAll(
+          '.inline-flex.bg-contrast.text-text span'
+        ));
+
+        // input placeholder
+        container.querySelectorAll('input[placeholder]').forEach(input => {
+          const p = input.placeholder.trim();
+          if (map[p]) input.placeholder = map[p];
+        });
+
+        // ボタンやspan等、除外spanは“スキップ”
+        container.querySelectorAll('button, span, label, [aria-label], [title]').forEach(el => {
+          // 除外spanは無視
+          if (exclusionSpans.includes(el)) return;
+          if (el.hasAttribute('aria-label')) {
+            const label = el.getAttribute('aria-label');
+            if (map[label]) el.setAttribute('aria-label', map[label]);
+          }
+          if (el.hasAttribute('title')) {
+            const t = el.getAttribute('title');
+            if (map[t]) el.setAttribute('title', map[t]);
+          }
+          el.childNodes.forEach(child => {
+            if (child.nodeType === Node.TEXT_NODE) {
+              const raw = child.nodeValue.trim();
+              if (map[raw]) child.nodeValue = map[raw];
+            }
+          });
+        });
+      });
+    };
+
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
   // メイン監視（フォントとEnter制御）
   new MutationObserver(() => {
     applyEditorStyle();
@@ -1036,4 +1109,5 @@
   localizeStatsLine();
   localizeNoteFooterInfoExtra();
   localizeLinkPopover();
+  localizeEditorTitleBar();
 })();
