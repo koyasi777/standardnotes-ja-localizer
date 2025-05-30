@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 + IME修正 ✨
-// @version      1.6.5
+// @version      1.6.6
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -185,9 +185,12 @@
       "No tags found. Try a different search.": "タグが見つかりません。他の検索条件をお試しください。",
     };
     const translate = () => {
-      document.querySelectorAll('.opacity-60, .opacity-50, .text-base, .lg\\:text-sm').forEach(el => {
-        const raw = el.textContent.trim();
-        if (map[raw]) el.textContent = map[raw];
+      // サイドバーのナビゲーションコンテンツだけを限定
+      document.querySelectorAll('#navigation-content section').forEach(section => {
+        section.querySelectorAll('div').forEach(el => {
+          const raw = el.textContent.trim();
+          if (map[raw]) el.textContent = map[raw];
+        });
       });
     };
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
