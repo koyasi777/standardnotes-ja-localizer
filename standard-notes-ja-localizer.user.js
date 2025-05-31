@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.7.1
+// @version      1.7.2
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -1134,47 +1134,42 @@
       "Notes": "ノート一覧"
     };
 
-    let prevTranslated = "";
+  function translate() {
+    // .section-title-bar-header配下だけに限定
+    document.querySelectorAll(
+      '.section-title-bar-header .text-2xl.font-semibold.text-text, .section-title-bar-header .md\\:text-lg.font-semibold.text-text'
+    ).forEach(el => {
+      const raw = el.textContent.trim();
+      if (map[raw]) el.textContent = map[raw];
+    });
+  }
 
-    // 1. 初期状態で「opacity:0」を指定（CSSクラスを追加）
-    function hideTitle() {
-      document.querySelectorAll('#items-title-bar .text-2xl.font-semibold.text-text, #items-title-bar .md\\:text-lg.font-semibold.text-text')
-        .forEach(el => el.style.opacity = '0.6');
-    }
-    function showTitle() {
-      document.querySelectorAll('#items-title-bar .text-2xl.font-semibold.text-text, #items-title-bar .md\\:text-lg.font-semibold.text-text')
-        .forEach(el => el.style.opacity = '1');
-    }
-
-    const translate = () => {
-      document.querySelectorAll('#items-title-bar .text-2xl.font-semibold.text-text, #items-title-bar .md\\:text-lg.font-semibold.text-text').forEach(el => {
-        const raw = el.textContent.trim();
-        if (Object.values(map).includes(raw)) {
-          el.style.opacity = '1'; // 既に日本語なら即表示
-          return;
-        }
-        if (map[raw]) {
-          el.textContent = map[raw];
-          el.style.opacity = '1'; // 翻訳したら表示
-          prevTranslated = map[raw];
-        } else {
-          el.style.opacity = '0'; // 未翻訳は透明
+    // より確実に反応させるためのオブザーバ設定
+    const observer = new MutationObserver((mutations) => {
+      let shouldTranslate = false;
+      mutations.forEach(mutation => {
+        // テキストやノードの追加/変更時のみ反応
+        if (
+          mutation.type === "childList" ||
+          mutation.type === "characterData" ||
+          mutation.type === "subtree"
+        ) {
+          shouldTranslate = true;
         }
       });
-    };
+      if (shouldTranslate) {
+        setTimeout(translate, 0); // Reactの再描画後に実行
+      }
+    });
 
-    // 2. 描画直後にタイトルだけ隠す
-    hideTitle();
+    observer.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true
+    });
 
-    setInterval(translate, 300);
-    new MutationObserver(() => {
-      hideTitle();
-      setTimeout(translate, 0); // DOM反映後に翻訳
-    }).observe(document.body, { childList: true, subtree: true });
-    // 初回
     translate();
   }
-  localizeItemsListTitle();
 
   // メイン監視（フォントとEnter制御）
   new MutationObserver(() => {
@@ -1208,4 +1203,5 @@
   localizeLinkPopover();
   localizeEditorTitleBar();
   localizeMoveToTrashModal();
+  localizeItemsListTitle();
 })();
