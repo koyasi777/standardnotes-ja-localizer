@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.7.2
+// @version      1.7.3
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standard-notes-ja-localizer
 // @author       koyasi777
@@ -32,6 +32,8 @@
 
     let isComposing = false;
     let preventNextBlur = false;
+    let savedStart = 0;
+    let savedEnd = 0;
 
     titleInput.addEventListener('compositionstart', () => {
       isComposing = true;
@@ -40,6 +42,12 @@
     titleInput.addEventListener('compositionend', () => {
       isComposing = false;
       preventNextBlur = true;
+
+      // IME確定「後」のキャレット位置を次のtickで取得する
+      setTimeout(() => {
+        savedStart = titleInput.selectionStart;
+        savedEnd = titleInput.selectionEnd;
+      }, 0);
     });
 
     titleInput.addEventListener('blur', () => {
@@ -47,8 +55,7 @@
         preventNextBlur = false;
         setTimeout(() => {
           titleInput.focus();
-          const len = titleInput.value.length;
-          titleInput.setSelectionRange(len, len);
+          titleInput.setSelectionRange(savedStart, savedEnd);  // ← 確定後のカーソル位置に復元
         }, 0);
       }
     });
@@ -59,11 +66,11 @@
         e.stopPropagation();
         setTimeout(() => {
           titleInput.focus();
-          const len = titleInput.value.length;
-          titleInput.setSelectionRange(len, len);
+          titleInput.setSelectionRange(savedStart, savedEnd); // ← same as blur復元
         }, 0);
       }
     }, true);
+
   };
 
   const translateTextNode = (el, map) => {
