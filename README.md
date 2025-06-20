@@ -15,7 +15,7 @@
 1. ブラウザにユーザースクリプトマネージャーを導入  
    - 推奨: [Violentmonkey](https://violentmonkey.github.io/) または [Tampermonkey](https://www.tampermonkey.net/)
 2. スクリプトを以下からインストール  
-   👉 [standard-notes-ja-localizer.user.js](https://raw.githubusercontent.com/koyasi777/standard-notes-ja-localizer/main/standard-notes-ja-localizer.user.js)
+   👉 [standardnotes-ja-localizer.user.js](https://raw.githubusercontent.com/koyasi777/standardnotes-ja-localizer/main/standardnotes-ja-localizer.user.js)
 
 ---
 
