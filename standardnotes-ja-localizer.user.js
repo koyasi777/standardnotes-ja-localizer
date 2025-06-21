@@ -25,52 +25,71 @@
   };
 
   const setupTitleField = () => {
-    const titleInput = document.getElementById('note-title-editor');
-    if (!titleInput || titleInput.dataset.enterHandled) return;
-    titleInput.dataset.enterHandled = 'true';
-    if (!isFirefox) return;
+    const titleInput = document.getElementById('note-title-editor');
+    if (!titleInput || titleInput.dataset.enterHandled) return;
+    titleInput.dataset.enterHandled = 'true';
 
-    let isComposing = false;
-    let preventNextBlur = false;
-    let savedStart = 0;
-    let savedEnd = 0;
+    // isComposingフラグは、この関数のスコープ内で管理
+    let isComposing = false;
 
-    titleInput.addEventListener('compositionstart', () => {
-      isComposing = true;
-    });
+    // --- Firefox向けIMEバグ修正ロジック ---
+    if (isFirefox) {
+        let preventNextBlur = false;
+        let savedStart = 0;
+        let savedEnd = 0;
 
-    titleInput.addEventListener('compositionend', () => {
-      isComposing = false;
-      preventNextBlur = true;
+        titleInput.addEventListener('compositionstart', () => {
+            isComposing = true;
+        });
 
-      // IME確定「後」のキャレット位置を次のtickで取得する
-      setTimeout(() => {
-        savedStart = titleInput.selectionStart;
-        savedEnd = titleInput.selectionEnd;
-      }, 0);
-    });
+        titleInput.addEventListener('compositionend', () => {
+            isComposing = false;
+            preventNextBlur = true;
+            setTimeout(() => {
+                savedStart = titleInput.selectionStart;
+                savedEnd = titleInput.selectionEnd;
+            }, 0);
+        });
 
-    titleInput.addEventListener('blur', () => {
-      if (preventNextBlur) {
-        preventNextBlur = false;
-        setTimeout(() => {
-          titleInput.focus();
-          titleInput.setSelectionRange(savedStart, savedEnd);  // ← 確定後のカーソル位置に復元
-        }, 0);
-      }
-    });
+        titleInput.addEventListener('blur', () => {
+            if (preventNextBlur) {
+                preventNextBlur = false;
+                setTimeout(() => {
+                    titleInput.focus();
+                    titleInput.setSelectionRange(savedStart, savedEnd);
+                }, 0);
+            }
+        });
+    } else {
+        // Firefox以外でもisComposingフラグは必要
+        titleInput.addEventListener('compositionstart', () => { isComposing = true; });
+        titleInput.addEventListener('compositionend', () => { isComposing = false; });
+    }
 
-    titleInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
+    // --- Enterキー処理を「司令塔」として再設計 ---
+    titleInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        // デフォルトのEnterキーの動作は常に無効化
         e.preventDefault();
-        e.stopPropagation();
-        setTimeout(() => {
-          titleInput.focus();
-          titleInput.setSelectionRange(savedStart, savedEnd); // ← same as blur復元
-        }, 0);
-      }
-    }, true);
 
+        // IMEが変換中のEnterであれば、変換を優先し、何もせず処理を終了
+        if (isComposing) {
+          return;
+        }
+
+        // IME変換中でなければ、イベントの伝播を止めずに、
+        // 代わりに「タイトルでEnterが押された」というカスタムイベントを発行する。
+        // これにより、他のスクリプトがこのイベントをリッスンして後続処理を行える。
+        const customEvent = new CustomEvent('sn:title:enter', {
+            bubbles: true, // イベントがDOMを上に伝播（バブリング）することを許可
+            cancelable: true
+        });
+        titleInput.dispatchEvent(customEvent);
+
+        // stopPropagation() は削除し、イベントが他のリスナーに届く道を確保する
+        // e.stopPropagation();
+      }
+    }, true); // キャプチャフェーズでイベントを捕捉するのは維持する
   };
 
   const translateTextNode = (el, map) => {
