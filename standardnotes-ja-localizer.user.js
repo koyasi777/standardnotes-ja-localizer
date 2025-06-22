@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.7.5
+// @version      1.7.6
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standardnotes-ja-localizer
 // @author       koyasi777
@@ -1160,15 +1160,15 @@
       "Notes": "ノート一覧"
     };
 
-  function translate() {
-    // .section-title-bar-header配下だけに限定
-    document.querySelectorAll(
-      '.section-title-bar-header .text-2xl.font-semibold.text-text, .section-title-bar-header .md\\:text-lg.font-semibold.text-text'
-    ).forEach(el => {
-      const raw = el.textContent.trim();
-      if (map[raw]) el.textContent = map[raw];
-    });
-  }
+    function translate() {
+      // .section-title-bar-header配下だけに限定
+      document.querySelectorAll(
+        '.section-title-bar-header .text-2xl.font-semibold.text-text, .section-title-bar-header .md\\:text-lg.font-semibold.text-text'
+      ).forEach(el => {
+        const raw = el.textContent.trim();
+        if (map[raw]) el.textContent = map[raw];
+      });
+    }
 
     // より確実に反応させるためのオブザーバ設定
     const observer = new MutationObserver((mutations) => {
@@ -1194,6 +1194,67 @@
       subtree: true
     });
 
+    translate();
+  }
+
+  function localizeEmptyTagsMessage() {
+    const map = {
+        "No tags or folders. Create one using the add button above.": "タグやフォルダはありません。上の追加ボタンで作成してください。"
+    };
+
+    const translate = () => {
+        document.querySelectorAll('.section-title-bar').forEach(titleBar => {
+            const titleText = titleBar.textContent;
+            if (titleText.includes('Tags') || titleText.includes('タグ') || titleText.includes('フォルダ')) {
+                const nextElement = titleBar.nextElementSibling;
+                if (nextElement) {
+                    const rawText = nextElement.textContent.trim();
+                    if (map[rawText]) {
+                        nextElement.textContent = map[rawText];
+                    }
+                }
+            }
+        });
+    };
+
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
+  /**
+   * 未ログイン時のデータバックアップ警告を日本語化します。
+   */
+  function localizeDataNotBackedUpWarning() {
+    const map = {
+        "Data not backed up": "データがバックアップされていません",
+        "Sign in or register to sync your notes to your other devices with end-to-end encryption.": "サインインまたは登録すると、エンドツーエンド暗号化で他のデバイスとノートを同期できます。",
+        "Open Account menu": "アカウントメニューを開く"
+    };
+
+    const translate = () => {
+        document.querySelectorAll('h1').forEach(h1 => {
+            const h1Text = h1.textContent.trim();
+            if (h1Text === "Data not backed up") {
+                const container = h1.parentElement;
+                if (!container) return;
+
+                h1.textContent = map["Data not backed up"];
+
+                const p = container.querySelector('p');
+                if (p && p.textContent.trim() === "Sign in or register to sync your notes to your other devices with end-to-end encryption.") {
+                    p.textContent = map["Sign in or register to sync your notes to your other devices with end-to-end encryption."];
+                }
+
+                container.querySelectorAll('button').forEach(button => {
+                   if (button.textContent.trim().toUpperCase() === "OPEN ACCOUNT MENU") {
+                       button.textContent = map["Open Account menu"];
+                   }
+                });
+            }
+        });
+    };
+
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
 
@@ -1230,4 +1291,6 @@
   localizeEditorTitleBar();
   localizeMoveToTrashModal();
   localizeItemsListTitle();
+  localizeEmptyTagsMessage();
+  localizeDataNotBackedUpWarning();
 })();
