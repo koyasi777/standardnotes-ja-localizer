@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.8.1
+// @version      1.9.2
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standardnotes-ja-localizer
 // @author       koyasi777
@@ -17,6 +17,97 @@
 
   const isFirefox = navigator.userAgent.toLowerCase().includes('firefox');
 
+  // --- 翻訳・書式設定ヘルパー関数 ---
+
+  const enToJaUnits = {
+    'words': '単語', 'word': '単語', 'characters': '文字', 'character': '文字',
+    'paragraphs': '段落', 'paragraph': '段落',
+  };
+  const enToJaWeek = { 'Sun': '日', 'Mon': '月', 'Tue': '火', 'Wed': '水', 'Thu': '木', 'Fri': '金', 'Sat': '土' };
+  const enToNumMonth = {
+    'Jan': '1', 'Feb': '2', 'Mar': '3', 'Apr': '4', 'May': '5', 'Jun': '6',
+    'Jul': '7', 'Aug': '8', 'Sep': '9', 'Oct': '10', 'Nov': '11', 'Dec': '12',
+  };
+  const jaWeekShort = { '日': '日', '月': '月', '火': '火', '水': '水', '木': '木', '金': '金', '土': '土' };
+
+  /**
+   * 時間単位を日本語に翻訳します。（例: "5 minutes" -> "5分"）
+   * @param {string} text - 翻訳するテキスト。
+   * @returns {string} 翻訳後のテキスト。
+   */
+  function translateTimeUnit(text) {
+    if (!text || typeof text !== 'string') return text;
+    const unitMap = { second: '秒', minute: '分', hour: '時間', day: '日', week: '週間' };
+    let newText = text.replace(/<\s*(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?)/g, (m, num, unit) =>
+      `< ${num}${unitMap[unit.replace(/s$/, '')] || unit}`);
+    newText = newText.replace(/(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?)/g, (m, num, unit) =>
+      `${num}${unitMap[unit.replace(/s$/, '')] || unit}`);
+    return newText.replace(/less than a minute/i, "1分未満");
+  }
+
+  /**
+   * 英語の日付書式を日本語の「YYYY/MM/DD (曜)」形式に変換します。
+   * @param {string} str - 変換する日付文字列。
+   * @returns {string} 変換後の日付文字列。
+   */
+  function convertDateFormat(str) {
+    if (!str || typeof str !== 'string') return str;
+    const dateRegex = /\b(?<wday>Sun|Mon|Tue|Wed|Thu|Fri|Sat|日|月|火|水|木|金|土)\s+(?<month>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{1,2}月)\s+(?<day>\d{1,2}),?\s+(?<year>\d{4})/;
+    const match = str.match(dateRegex);
+    if (match && match.groups) {
+      const { wday, month, day, year } = match.groups;
+      const jaWday = enToJaWeek[wday] || jaWeekShort[wday] || wday;
+      const numMonth = enToNumMonth[month] || month.replace('月', '');
+      let jaDate = `${year}/${numMonth}/${day} (${jaWday})`;
+      const timeMatch = str.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/);
+      if (timeMatch) jaDate += ' ' + timeMatch[0];
+      return jaDate;
+    }
+    return str;
+  }
+
+  /**
+   * 指定されたDOM要素内を再帰的に探索し、テキストノードを翻訳マップに基づいて日本語化します。
+   * @param {Node} node - 探索を開始するDOMノード。
+   * @param {Object} map - 翻訳辞書オブジェクト。
+   */
+  const walkAndTranslate = (node, map) => {
+    if (!node) return;
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      const trimmedText = node.nodeValue.trim();
+      if (map[trimmedText]) {
+        node.nodeValue = node.nodeValue.replace(trimmedText, map[trimmedText]);
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE' || node.closest('[data-ignore-translation="true"]')) {
+        return;
+      }
+      Array.from(node.childNodes).forEach(child => walkAndTranslate(child, map));
+    }
+  };
+
+  /**
+   * 指定されたDOM要素内のテキストノードを再帰的に探索し、日付と時刻の書式を日本語化します。
+   * @param {Node} node - 探索を開始するDOMノード。
+   */
+  const walkAndFormatDate = (node) => {
+    if (!node) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      let newText = convertDateFormat(translateTimeUnit(node.nodeValue));
+      if (node.nodeValue !== newText) {
+        node.nodeValue = newText;
+      }
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
+        Array.from(node.childNodes).forEach(child => walkAndFormatDate(child));
+      }
+    }
+  };
+
+
+  // --- IME修正 & スタイル適用 ---
+
   const applyEditorStyle = () => {
     const editor = document.getElementById('note-text-editor');
     if (editor) {
@@ -32,35 +123,35 @@
     let isComposing = false;
 
     if (isFirefox) {
-        let preventNextBlur = false;
-        let savedStart = 0;
-        let savedEnd = 0;
+      let preventNextBlur = false;
+      let savedStart = 0;
+      let savedEnd = 0;
 
-        titleInput.addEventListener('compositionstart', () => {
-            isComposing = true;
-        });
+      titleInput.addEventListener('compositionstart', () => {
+        isComposing = true;
+      });
 
-        titleInput.addEventListener('compositionend', () => {
-            isComposing = false;
-            preventNextBlur = true;
-            setTimeout(() => {
-                savedStart = titleInput.selectionStart;
-                savedEnd = titleInput.selectionEnd;
-            }, 0);
-        });
+      titleInput.addEventListener('compositionend', () => {
+        isComposing = false;
+        preventNextBlur = true;
+        setTimeout(() => {
+          savedStart = titleInput.selectionStart;
+          savedEnd = titleInput.selectionEnd;
+        }, 0);
+      });
 
-        titleInput.addEventListener('blur', () => {
-            if (preventNextBlur) {
-                preventNextBlur = false;
-                setTimeout(() => {
-                    titleInput.focus();
-                    titleInput.setSelectionRange(savedStart, savedEnd);
-                }, 0);
-            }
-        });
+      titleInput.addEventListener('blur', () => {
+        if (preventNextBlur) {
+          preventNextBlur = false;
+          setTimeout(() => {
+            titleInput.focus();
+            titleInput.setSelectionRange(savedStart, savedEnd);
+          }, 0);
+        }
+      });
     } else {
-        titleInput.addEventListener('compositionstart', () => { isComposing = true; });
-        titleInput.addEventListener('compositionend', () => { isComposing = false; });
+      titleInput.addEventListener('compositionstart', () => { isComposing = true; });
+      titleInput.addEventListener('compositionend', () => { isComposing = false; });
     }
 
     titleInput.addEventListener('keydown', (e) => {
@@ -78,55 +169,20 @@
     }, true);
   };
 
-  /**
-   * 指定されたDOM要素内を再帰的に探索し、テキストノードを翻訳マップに基づいて日本語化します。
-   * @param {Node} node - 探索を開始するDOMノード。
-   * @param {Object} map - 翻訳辞書オブジェクト。
-   */
-  const walkAndTranslate = (node, map) => {
-      if (!node) return;
 
-      if (node.nodeType === Node.TEXT_NODE) {
-          const trimmedText = node.nodeValue.trim();
-          if (map[trimmedText]) {
-              node.nodeValue = node.nodeValue.replace(trimmedText, map[trimmedText]);
-          }
-      } else if (node.nodeType === Node.ELEMENT_NODE) {
-          if (node.tagName === 'SCRIPT' || node.tagName === 'STYLE') {
-              return;
-          }
-          const children = Array.from(node.childNodes);
-          children.forEach(child => walkAndTranslate(child, map));
-      }
-  };
-
+  // --- 各UI要素の日本語化関数 ---
 
   const localizeDisplayOptions = () => {
     const map = {
-      "Display options": "表示オプション",
-      "Done": "完了",
-      "Preferences for": "次の設定対象",
-      "Sort by": "並び替え順",
-      "Date modified": "変更日",
-      "Creation date": "作成日",
-      "Title": "タイトル",
-      "View": "表示形式",
-      "Show note preview": "ノートプレビューを表示",
-      "Show date": "日付を表示",
-      "Show tags": "タグを表示",
-      "Show icon": "アイコンを表示",
-      "Other": "その他",
-      "Show pinned": "ピン留めを表示",
-      "Show protected": "保護されたノートを表示",
-      "Show archived": "アーカイブ済みノートを表示",
-      "Show trashed": "ゴミ箱内ノートを表示",
-      "New note defaults": "新規ノートのデフォルト設定",
-      "Note Type": "ノートタイプ",
-      "Title Format": "タイトル形式",
-      "Current date and time": "現在の日時",
-      "Current note count": "ノート数",
-      "Custom format": "カスタム形式",
-      "Empty": "空欄",
+      "Display options": "表示オプション", "Done": "完了", "Preferences for": "次の設定対象",
+      "Sort by": "並び替え順", "Date modified": "変更日", "Creation date": "作成日",
+      "Title": "タイトル", "View": "表示形式", "Show note preview": "ノートプレビューを表示",
+      "Show date": "日付を表示", "Show tags": "タグを表示", "Show icon": "アイコンを表示",
+      "Other": "その他", "Show pinned": "ピン留めを表示",
+      "Show protected": "保護されたノートを表示", "Show archived": "アーカイブ済みノートを表示",
+      "Show trashed": "ゴミ箱内ノートを表示", "New note defaults": "新規ノートのデフォルト設定",
+      "Note Type": "ノートタイプ", "Title Format": "タイトル形式", "Current date and time": "現在の日時",
+      "Current note count": "ノート数", "Custom format": "カスタム形式", "Empty": "空欄",
       "Global": "グローバル",
     };
 
@@ -145,16 +201,10 @@
     translate();
   };
 
-
   const localizeSidebarViews = () => {
     const map = {
-      "Views": "ビュー",
-      "Notes": "ノート一覧",
-      "Files": "ファイル",
-      "Starred": "お気に入り",
-      "Archived": "アーカイブ",
-      "Trash": "ゴミ箱",
-      "Untagged": "タグなし",
+      "Views": "ビュー", "Notes": "ノート一覧", "Files": "ファイル", "Starred": "お気に入り",
+      "Archived": "アーカイブ", "Trash": "ゴミ箱", "Untagged": "タグなし",
       "Create a new smart view": "スマートビューを作成"
     };
 
@@ -175,9 +225,7 @@
 
   const localizeTagsSection = () => {
     const map = {
-      "Tags": "タグ",
-      "Folders": "フォルダ",
-      "Create a new tag (Ctrl+Alt+N)": "タグを作成（Ctrl+Alt+N）"
+      "Tags": "タグ", "Folders": "フォルダ", "Create a new tag (Ctrl+Alt+N)": "タグを作成（Ctrl+Alt+N）"
     };
 
     const translate = () => {
@@ -194,18 +242,13 @@
   };
 
   const localizeSearchBoxes = () => {
-    const map = {
-      "Search...": "検索...",
-      "Search tags...": "タグを検索..."
-    };
-
+    const map = { "Search...": "検索...", "Search tags...": "タグを検索..." };
     const translate = () => {
       document.querySelectorAll('input[placeholder]').forEach(input => {
         const p = input.placeholder.trim();
         if (map[p]) input.placeholder = map[p];
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
@@ -217,8 +260,8 @@
     };
     const translate = () => {
       document.querySelectorAll('#navigation-content section div').forEach(el => {
-          const raw = el.textContent.trim();
-          if (map[raw]) el.textContent = map[raw];
+        const raw = el.textContent.trim();
+        if (map[raw]) el.textContent = map[raw];
       });
     };
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
@@ -226,12 +269,7 @@
   };
 
   const localizeFilterButtons = () => {
-    const map = {
-      "Protected Contents": "保護されたノート",
-      "Archived": "アーカイブ済み",
-      "Trashed": "ゴミ箱"
-    };
-
+    const map = { "Protected Contents": "保護されたノート", "Archived": "アーカイブ済み", "Trashed": "ゴミ箱" };
     const translate = () => {
       document.querySelectorAll('button[role="checkbox"]').forEach(btn => {
         if (map[btn.textContent.trim()]) {
@@ -239,7 +277,6 @@
         }
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
@@ -268,7 +305,6 @@
         }
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
@@ -278,13 +314,11 @@
       "Read time:": "読了時間：", "Last modified:": "最終更新：", "Created:": "作成日：",
       "Note ID:": "ノートID：", "Size:": "サイズ："
     };
-
     const translate = () => {
       document.querySelectorAll('.select-text span.font-semibold').forEach(span => {
         walkAndTranslate(span, map);
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
@@ -296,21 +330,18 @@
       "Allow protected access for": "保護されたアクセスの許可期間",
       "1 Minute": "1分", "5 Minutes": "5分", "1 Hour": "1時間", "1 Week": "1週間", "Submit": "送信"
     };
-
     const translate = () => {
       document.querySelectorAll('[role="dialog"], [data-dialog]').forEach(dialog => {
-        // Look for a specific element that only exists in this modal
         if (dialog.querySelector('input[type="password"]')) {
-            walkAndTranslate(dialog, map);
-            dialog.querySelectorAll('input[placeholder], button[aria-label]').forEach(el => {
-                const attr = el.hasAttribute('placeholder') ? 'placeholder' : 'aria-label';
-                const val = el.getAttribute(attr);
-                if(map[val]) el.setAttribute(attr, map[val]);
-            });
+          walkAndTranslate(dialog, map);
+          dialog.querySelectorAll('input[placeholder], button[aria-label]').forEach(el => {
+            const attr = el.hasAttribute('placeholder') ? 'placeholder' : 'aria-label';
+            const val = el.getAttribute(attr);
+            if (map[val]) el.setAttribute(attr, map[val]);
+          });
         }
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
@@ -322,14 +353,12 @@
       "Help & feedback": "ヘルプとフィードバック", "Keyboard shortcuts": "キーボードショートカット",
       "Sign out workspace": "ワークスペースからサインアウト"
     };
-
     const translate = () => {
       const menu = document.querySelector('#account-menu');
       if (menu) {
         walkAndTranslate(menu, map);
       }
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
@@ -341,78 +370,54 @@
       "Titanium": "チタニウム", "Dynamic Panels": "ダイナミックパネル", "Focus Mode": "フォーカスモード",
       "Show Tags Panel": "タグパネルを表示", "Show Notes Panel": "ノートパネルを表示"
     };
-
     const translate = () => {
       const menu = document.querySelector('[aria-label="Quick settings menu"]');
       if (menu) {
-          walkAndTranslate(menu, map);
+        walkAndTranslate(menu, map);
       }
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
 
-  /**
-   * [修正済み] 設定関連の翻訳関数をこの一つに統合しました。
-   * これにより、どのパネルが表示されても動的に内容を追跡し、確実に翻訳を適用します。
-   */
   const localizePreferencesDialog = () => {
     const map = {
       // --- Menu ---
       "What's New": "新着情報", "Account": "アカウント", "General": "一般", "Security": "セキュリティ",
       "Backups": "バックアップ", "Appearance": "外観", "Listed": "Listed（公開）", "Plugins": "プラグイン",
-      "Help & feedback": "ヘルプとフィードバック", "Preferences Menu": "設定メニュー",
+      "Help & feedback": "ヘルプとフィードバック", "Preferences Menu": "設定メニュー", "Labs": "ラボ",
 
       // --- Dialog Title & Close Button ---
-      "Your preferences for Standard Notes": "Standard Notesの設定",
-      "Close preferences": "設定を閉じる",
+      "Your preferences for Standard Notes": "Standard Notesの設定", "Close preferences": "設定を閉じる",
 
       // --- General Panel ---
-      "When opening the app, show...": "アプリ起動時に表示する内容",
-      "The first note in the list": "ノート一覧の最初のノート",
-      "The last viewed note": "最後に表示していたノート",
-      "Defaults": "デフォルト設定", "Spellcheck": "スペルチェック",
-      "The default spellcheck value for new notes. Spellcheck can be configured per note from the note context menu. Spellcheck may degrade overall typing performance with long notes.":
-        "新規ノートのデフォルトのスペルチェック設定です。スペルチェックは各ノートのメニューで個別に設定できます。長いノートでは入力パフォーマンスに影響する可能性があります。",
+      "When opening the app, show...": "アプリ起動時に表示する内容", "The first note in the list": "ノート一覧の最初のノート",
+      "The last viewed note": "最後に表示していたノート", "Defaults": "デフォルト設定", "Spellcheck": "スペルチェック",
+      "The default spellcheck value for new notes. Spellcheck can be configured per note from the note context menu. Spellcheck may degrade overall typing performance with long notes.": "新規ノートのデフォルトのスペルチェック設定です。スペルチェックは各ノートのメニューで個別に設定できます。長いノートでは入力パフォーマンスに影響する可能性があります。",
       "Add all parent tags when adding a nested tag to a note": "ネストタグ追加時に親タグも追加する",
-      "When enabled, adding a nested tag to a note will automatically add all associated parent tags.":
-        "有効にすると、ネストされたタグをノートに追加した際に、親タグも自動的に追加されます。",
+      "When enabled, adding a nested tag to a note will automatically add all associated parent tags.": "有効にすると、ネストされたタグをノートに追加した際に、親タグも自動的に追加されます。",
       "Use always-visible toolbar in Super notes": "Superノートでツールバーを常時表示",
-      "When enabled, the Super toolbar will always be shown at the top of the note. It can be temporarily toggled using Cmd/Ctrl+Shift+K. When disabled, the Super toolbar will only be shown as a floating toolbar when text is selected.":
-        "有効時は、Superツールバーが常にノートの上部に表示されます（Cmd/Ctrl+Shift+Kで一時的に切り替え可能）。無効時は、テキスト選択時のみフローティング表示されます。",
-      "Default image alignment in Super notes": "Superノートでの画像のデフォルト配置",
-      "Left align": "左揃え", "Center align": "中央揃え", "Right align": "右揃え",
-      "New Note Defaults": "新規ノートのデフォルト設定", "Note Type": "ノートタイプ",
-      "Plain Text": "プレーンテキスト", "Authenticator": "認証システム", "Spreadsheet": "スプレッドシート", "Super": "Superノート",
-      "Title Format": "タイトル形式", "Empty": "空欄", "Current date and time": "現在の日時",
-      "Current note count": "ノート数", "Custom format": "カスタム形式",
+      "When enabled, the Super toolbar will always be shown at the top of the note. It can be temporarily toggled using Cmd/Ctrl+Shift+K. When disabled, the Super toolbar will only be shown as a floating toolbar when text is selected.": "有効時は、Superツールバーが常にノートの上部に表示されます（Cmd/Ctrl+Shift+Kで一時的に切り替え可能）。無効時は、テキスト選択時のみフローティング表示されます。",
+      "Default image alignment in Super notes": "Superノートでの画像のデフォルト配置", "Left align": "左揃え", "Center align": "中央揃え", "Right align": "右揃え",
+      "New Note Defaults": "新規ノートのデフォルト設定", "Note Type": "ノートタイプ", "Plain Text": "プレーンテキスト",
+      "Authenticator": "認証システム", "Spreadsheet": "スプレッドシート", "Super": "Superノート", "Title Format": "タイトル形式",
+      "Empty": "空欄", "Current date and time": "現在の日時", "Current note count": "ノート数", "Custom format": "カスタム形式",
       "Tools": "ツール", "Show note saving status while editing": "編集中の保存ステータスを表示",
-      "Control whether the animated saving status is shown while editing. Error statuses are always shown regardless of preference.":
-        "編集中にアニメーション付きの保存ステータスを表示するかを制御します。エラーは常に表示されます。",
+      "Control whether the animated saving status is shown while editing. Error statuses are always shown regardless of preference.": "編集中にアニメーション付きの保存ステータスを表示するかを制御します。エラーは常に表示されます。",
       "Smart Views": "スマートビュー", "Upgrade for smart views": "スマートビュー機能のアップグレード",
-      "Create smart views to organize your notes according to conditions you define.":
-        "条件を定義して、ノートを整理するためのスマートビューを作成できます。",
-      "Upgrade Features": "機能をアップグレード",
-      "Moments": "モーメンツ", "Labs": "ラボ", "Professional": "プロフェッショナル",
-      "Your personal photo journal": "あなたの写真日記",
-      "Moments lets you capture photos of yourself throughout the day, creating a visual record of your life, one photo at a time. Using your webcam or mobile selfie-cam, Moments takes a photo of you every half hour. All photos are end-to-end encrypted and stored in your files. Enable Moments on a per-device basis to get started.":
-        "Momentsは1日に複数回、自動的にあなたの写真を撮影し、ライフログとして視覚的に記録します。Webカメラやスマホの自撮りカメラを使用し、30分ごとに写真を撮影します。すべての写真はエンドツーエンド暗号化され、ファイルに保存されます。各デバイスで有効化できます。",
-      "Capture Present Moment": "今の瞬間を撮影",
-      "No experimental features available.": "利用可能な実験的機能はありません。",
+      "Create smart views to organize your notes according to conditions you define.": "条件を定義して、ノートを整理するためのスマートビューを作成できます。",
+      "Upgrade Features": "機能をアップグレード", "Moments": "モーメンツ", "Professional": "プロフェッショナル", "Your personal photo journal": "あなたの写真日記",
+      "Moments lets you capture photos of yourself throughout the day, creating a visual record of your life, one photo at a time. Using your webcam or mobile selfie-cam, Moments takes a photo of you every half hour. All photos are end-to-end encrypted and stored in your files. Enable Moments on a per-device basis to get started.": "Momentsは1日に複数回、自動的にあなたの写真を撮影し、ライフログとして視覚的に記録します。Webカメラやスマホの自撮りカメラを使用し、30分ごとに写真を撮影します。すべての写真はエンドツーエンド暗号化され、ファイルに保存されます。各デバイスで有効化できます。",
+      "Capture Present Moment": "今の瞬間を撮影", "No experimental features available.": "利用可能な実験的機能はありません。",
 
       // --- Account Panel ---
-      "Credentials": "認証情報", "Email": "メールアドレス", "Password": "パスワード",
-      "You're signed in as": "サインイン中：", "Change email": "メールアドレスを変更",
-      "Current password was set on": "現在のパスワードの設定日：", "Change password": "パスワードを変更",
-      "Sync": "同期", "Last synced": "最終同期", "Sync now": "今すぐ同期",
-      "Subscription": "サブスクリプション",
+      "Credentials": "認証情報", "Email": "メールアドレス", "Password": "パスワード", "You're signed in as": "サインイン中：",
+      "Change email": "メールアドレスを変更", "Current password was set on": "現在のパスワードの設定日：", "Change password": "パスワードを変更",
+      "Sync": "同期", "Last synced": "最終同期", "Sync now": "今すぐ同期", "Subscription": "サブスクリプション",
       "You don't have a Standard Notes subscription yet.": "まだStandard Notesのサブスクリプションに加入していません。",
-      "Learn More": "詳細を見る", "Subscribe": "購読する",
-      "Subscription sharing": "サブスクリプション共有",
+      "Learn More": "詳細を見る", "Subscribe": "購読する", "Subscription sharing": "サブスクリプション共有",
       "plan. Please upgrade in order to share your subscription.": "プランでのみ利用可能です。共有するにはアップグレードしてください。",
-      "Upgrade": "アップグレード",
-      "Mute sign-in notification emails": "サインイン通知メールをミュート",
+      "Upgrade": "アップグレード", "Mute sign-in notification emails": "サインイン通知メールをミュート",
       "Sign-in notification emails are available only on a": "サインイン通知メールは",
       "plan. Please upgrade in order to enable sign-in notifications.": "プランでのみ利用可能です。有効にするにはアップグレードが必要です。",
       "Mute marketing notification emails": "マーケティング通知メールをミュート",
@@ -420,26 +425,21 @@
       "Sign out": "サインアウト", "Other devices": "他のデバイス",
       "Want to sign out on all devices except this one?": "このデバイス以外からすべてサインアウトしますか？",
       "Sign out other sessions": "他のセッションをサインアウト", "Manage sessions": "セッションを管理",
-      "This workspace": "このワークスペース",
-      "Remove all data related to the current workspace from the application.": "現在のワークスペースに関連するすべてのデータをアプリケーションから削除します。",
+      "This workspace": "このワークスペース", "Remove all data related to the current workspace from the application.": "現在のワークスペースに関連するすべてのデータをアプリケーションから削除します。",
       "Sign out workspace": "ワークスペースからサインアウト", "Delete account": "アカウント削除",
-      "This action is irreversible. After deletion completes, you will be signed out on all devices.":
-        "この操作は取り消せません。削除後、すべてのデバイスでサインアウトされます。",
+      "This action is irreversible. After deletion completes, you will be signed out on all devices.": "この操作は取り消せません。削除後、すべてのデバイスでサインアウトされます。",
       "Delete my account": "アカウントを削除",
 
       // --- Security Panel ---
       "Encryption": "暗号化", "Protections": "保護機能", "Two-factor authentication": "二要素認証",
       "Passcode lock": "パスコードロック", "Privacy": "プライバシー",
-      "End-to-end encryption is enabled. Your data is encrypted on your device first, then synced to your private cloud.":
-        "エンドツーエンド暗号化が有効になっています。データはまずデバイス上で暗号化され、その後プライベートクラウドに同期されます。",
+      "End-to-end encryption is enabled. Your data is encrypted on your device first, then synced to your private cloud.": "エンドツーエンド暗号化が有効になっています。データはまずデバイス上で暗号化され、その後プライベートクラウドに同期されます。",
       "Protections are enabled.": "保護機能は有効です。",
-      "Actions like viewing or searching protected notes, exporting decrypted backups, or revoking an active session require additional authentication such as entering your account password or application passcode.":
-        "保護されたノートの閲覧や検索、復号化されたバックアップのエクスポート、有効なセッションの取り消しなどの操作には、アカウントのパスワードまたはアプリのパスコードによる追加認証が必要です。",
+      "Actions like viewing or searching protected notes, exporting decrypted backups, or revoking an active session require additional authentication such as entering your account password or application passcode.": "保護されたノートの閲覧や検索、復号化されたバックアップのエクスポート、有効なセッションの取り消しなどの操作には、アカウントのパスワードまたはアプリのパスコードによる追加認証が必要です。",
       "An extra layer of security when logging in to your account.": "アカウントへのログイン時に追加のセキュリティを提供します。",
       "Add a passcode to lock the application and encrypt on-device key storage.": "パスコードを設定してアプリケーションをロックし、デバイス上のキー保管を暗号化します。",
       "Session user agent logging": "セッションのユーザーエージェント記録",
-      "User agent logging allows you to identify the devices or browsers signed into your account. For increased privacy, you can disable this feature, which will remove all saved user agent values from our server, and disable future logging of this value.":
-        "ユーザーエージェントの記録により、アカウントにサインインしているデバイスやブラウザを識別できます。プライバシーを強化するためにこの機能を無効にすると、保存された記録がサーバーから削除され、今後の記録も停止されます。",
+      "User agent logging allows you to identify the devices or browsers signed into your account. For increased privacy, you can disable this feature, which will remove all saved user agent values from our server, and disable future logging of this value.": "ユーザーエージェントの記録により、アカウントにサインインしているデバイスやブラウザを識別できます。プライバシーを強化するためにこの機能を無効にすると、保存された記録がサーバーから削除され、今後の記録も停止されます。",
       "Add passcode": "パスコードを追加",
 
       // --- Backups Panel ---
@@ -479,8 +479,7 @@
 
       // --- Listed Panel ---
       "About Listed": "Listedについて", "What is Listed?": "Listedとは？", "Get Started": "始め方",
-      "Listed is a free blogging platform that allows you to create a public journal published directly from your notes.":
-        "Listedは、ノートから直接公開日記を作成できる無料のブログプラットフォームです。",
+      "Listed is a free blogging platform that allows you to create a public journal published directly from your notes.": "Listedは、ノートから直接公開日記を作成できる無料のブログプラットフォームです。",
       "Create a free Listed author account to get started.": "無料のListed作成者アカウントを作成して始めましょう。",
       "Create new author": "新しい作成者アカウントを作成",
 
@@ -491,42 +490,86 @@
       "Can I collaborate with others on a note?": "他人とノートを共同編集できますか？",
       "Can I use Standard Notes totally offline?": "Standard Notesを完全にオフラインで使えますか？",
       "Can’t find your question here?": "ここにない質問がありますか？",
-      "Quite simply: no one but you. Not us, not your ISP, not a hacker, and not a government agency. As long as you keep your password safe, and your password is reasonably strong, then you are the only person in the world with the ability to decrypt your notes. For more on how we handle your privacy and security, check out our easy to read":
-        "簡単に言えば、あなた以外の誰も読むことはできません。私たちも、あなたのISPも、ハッカーも、政府機関も含みません。パスワードを安全に保ち、十分に強固なものであれば、ノートを復号できるのは世界であなただけです。プライバシーとセキュリティに関する詳細は、読みやすいこちらをご覧ください：",
+      "Quite simply: no one but you. Not us, not your ISP, not a hacker, and not a government agency. As long as you keep your password safe, and your password is reasonably strong, then you are the only person in the world with the ability to decrypt your notes. For more on how we handle your privacy and security, check out our easy to read": "簡単に言えば、あなた以外の誰も読むことはできません。私たちも、あなたのISPも、ハッカーも、政府機関も含みません。パスワードを安全に保ち、十分に強固なものであれば、ノートを復号できるのは世界であなただけです。プライバシーとセキュリティに関する詳細は、読みやすいこちらをご覧ください：",
       "Privacy Manifesto.": "プライバシーマニフェスト。",
-      "Because of our encrypted architecture, Standard Notes does not currently provide a real-time collaboration solution. Multiple users can share the same account however, but editing at the same time may result in sync conflicts, which may result in the duplication of notes.":
-        "当サービスの暗号化アーキテクチャにより、現在リアルタイムでの共同編集には対応していません。ただし、同じアカウントを複数人で共有することは可能ですが、同時編集すると同期競合が発生し、ノートが重複する可能性があります。",
-      "Standard Notes can be used totally offline without an account, and without an internet connection. You can find":
-        "Standard Notesはアカウントなし・インターネット接続なしでも完全にオフラインで使用できます。詳しくは",
+      "Because of our encrypted architecture, Standard Notes does not currently provide a real-time collaboration solution. Multiple users can share the same account however, but editing at the same time may result in sync conflicts, which may result in the duplication of notes.": "当サービスの暗号化アーキテクチャにより、現在リアルタイムでの共同編集には対応していません。ただし、同じアカウントを複数人で共有することは可能ですが、同時編集すると同期競合が発生し、ノートが重複する可能性があります。",
+      "Standard Notes can be used totally offline without an account, and without an internet connection. You can find": "Standard Notesはアカウントなし・インターネット接続なしでも完全にオフラインで使用できます。詳しくは",
       "more details here.": "こちらをご覧ください。",
-      "If you have an issue, found a bug or want to suggest a feature, you can browse or post to the forum. It’s recommended for non-account related issues.":
-        "問題の報告やバグの発見、機能の提案などがある場合は、フォーラムを閲覧または投稿してください。アカウントに関連しない内容に推奨されます。",
-      "Want to meet other passionate note-takers and privacy enthusiasts? Want to share your feedback with us? Join the Standard Notes Discord for discussions on security, themes, editors and more.":
-        "他の熱心なノート愛用者やプライバシーに関心のある人と交流したいですか？フィードバックを共有したいですか？セキュリティ、テーマ、エディタなどについて議論するためにDiscordコミュニティに参加しましょう。",
-      "Send an email to help@standardnotes.com and we’ll sort it out.":
-        "help@standardnotes.com にメールを送ってください。私たちが対応いたします。",
+      "If you have an issue, found a bug or want to suggest a feature, you can browse or post to the forum. It’s recommended for non-account related issues.": "問題の報告やバグの発見、機能の提案などがある場合は、フォーラムを閲覧または投稿してください。アカウントに関連しない内容に推奨されます。",
+      "Want to meet other passionate note-takers and privacy enthusiasts? Want to share your feedback with us? Join the Standard Notes Discord for discussions on security, themes, editors and more.": "他の熱心なノート愛用者やプライバシーに関心のある人と交流したいですか？フィードバックを共有したいですか？セキュリティ、テーマ、エディタなどについて議論するためにDiscordコミュニティに参加しましょう。",
+      "Send an email to help@standardnotes.com and we’ll sort it out.": "help@standardnotes.com にメールを送ってください。私たちが対応いたします。",
       "Open FAQ": "FAQを開く", "Go to the forum": "フォーラムへ移動",
       "Join our Discord": "Discordに参加する", "Email us": "メールを送る"
     };
-
     const translate = () => {
-        const prefHeader = document.querySelector('div[data-preferences-header="true"]');
-        if (!prefHeader) return;
-
-        const dialog = prefHeader.closest('div[role="dialog"][data-enter]');
-        if (!dialog) return;
-
-        walkAndTranslate(dialog, map);
-
-        const closeButton = dialog.querySelector('button[aria-label="設定を閉じる"], button[aria-label="Close preferences"]');
-        if (closeButton && closeButton.getAttribute('aria-label') === 'Close preferences') {
-            closeButton.setAttribute('aria-label', map['Close preferences']);
-        }
+      const prefHeader = document.querySelector('div[data-preferences-header="true"]');
+      if (!prefHeader) return;
+      const dialog = prefHeader.closest('div[role="dialog"][data-enter]');
+      if (!dialog) return;
+      walkAndTranslate(dialog, map);
+      const closeButton = dialog.querySelector('button[aria-label="設定を閉じる"], button[aria-label="Close preferences"]');
+      if (closeButton && closeButton.getAttribute('aria-label') === 'Close preferences') {
+        closeButton.setAttribute('aria-label', map['Close preferences']);
+      }
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
+
+  /**
+   * [新規] ノート一覧カラムのUI要素（aria-label、更新日時など）を日本語化します。
+   */
+  function localizeItemsColumn() {
+    const map = {
+        "Display options menu": "表示オプションメニュー",
+        "Create a new note in the selected tag (Alt+Shift+N)": "選択中のタグに新規ノートを作成 (Alt+Shift+N)",
+        "Open navigation menu": "ナビゲーションメニューを開く",
+        "Notes & Files": "ノートとファイル"
+    };
+    const modifiedPrefix = "Modified";
+    const translatedPrefix = "更新日時:";
+
+    const translate = () => {
+        const itemsColumn = document.getElementById('items-column');
+        if (!itemsColumn) return;
+
+        // カラム自体と内部のボタンのaria-labelを翻訳
+        const mainLabel = itemsColumn.getAttribute('aria-label');
+        if (map[mainLabel] && mainLabel !== map[mainLabel]) {
+            itemsColumn.setAttribute('aria-label', map[mainLabel]);
+        }
+        itemsColumn.querySelectorAll('[aria-label]').forEach(el => {
+            const label = el.getAttribute('aria-label');
+            if (map[label] && el.getAttribute('aria-label') !== map[label]) {
+                el.setAttribute('aria-label', map[label]);
+            }
+        });
+
+        // ノートリスト内の更新日時を翻訳
+        itemsColumn.querySelectorAll('.content-list-item .leading-1\\.4 > span').forEach(span => {
+            const originalText = span.textContent.trim();
+            if (originalText.startsWith(modifiedPrefix)) {
+                const datePart = originalText.substring(modifiedPrefix.length).trim();
+                const match = datePart.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(.)曜日\s+(\d{1,2}:\d{2})$/);
+                if (match) {
+                    const [, year, month, day, dayOfWeek, time] = match;
+                    const newText = `${translatedPrefix} ${year}/${month}/${day} (${dayOfWeek}) ${time}`;
+                    if (span.textContent !== newText) {
+                         span.textContent = newText;
+                    }
+                }
+            }
+        });
+    };
+
+    const observer = new MutationObserver(translate);
+    observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+        characterData: true
+    });
+    translate();
+  }
 
   const localizeTagContextMenu = () => {
     const map = {
@@ -540,13 +583,15 @@
 
     const translate = () => {
       document.querySelectorAll('[data-popover]').forEach(popover => {
-        // Only target context menus for tags
-        if (popover.querySelector('input#emoji-input')) {
-            walkAndTranslate(popover, map);
-            popover.querySelectorAll('[aria-label]').forEach(el => {
-              const label = el.getAttribute('aria-label');
-              if (map[label]) el.setAttribute('aria-label', map[label]);
-            });
+        if (popover.querySelector('menu[aria-label="Tag context menu"]')) {
+          walkAndTranslate(popover, map);
+          walkAndFormatDate(popover);
+          popover.querySelectorAll('[aria-label]').forEach(el => {
+            const label = el.getAttribute('aria-label');
+            if (map[label] && el.getAttribute('aria-label') !== map[label]) {
+              el.setAttribute('aria-label', map[label]);
+            }
+          });
         }
       });
     };
@@ -554,17 +599,6 @@
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   };
-
-  const enToJaUnits = {
-    'words': '単語', 'word': '単語', 'characters': '文字', 'character': '文字',
-    'paragraphs': '段落', 'paragraph': '段落',
-  };
-  const enToJaWeek = { 'Sun': '日', 'Mon': '月', 'Tue': '火', 'Wed': '水', 'Thu': '木', 'Fri': '金', 'Sat': '土' };
-  const enToNumMonth = {
-    'Jan': '1', 'Feb': '2', 'Mar': '3', 'Apr': '4', 'May': '5', 'Jun': '6',
-    'Jul': '7', 'Aug': '8', 'Sep': '9', 'Oct': '10', 'Nov': '11', 'Dec': '12',
-  };
-  const jaWeekShort = { '日': '日', '月': '月', '火': '火', '水': '水', '木': '木', '金': '金', '土': '土' };
 
   function localizeStatsLine() {
     const translate = () => {
@@ -575,13 +609,13 @@
           buffer += node.nodeType === Node.TEXT_NODE ? node.nodeValue : node.textContent;
         });
         let jaLine = buffer.split(/[\u00b7·,・]/).map(part => {
-            const m = part.trim().match(/^(\d+)\s*(words?|characters?|paragraphs?)$/i);
-            if (m) {
-              const num = m[1], unit = m[2].toLowerCase().replace(/s$/, '');
-              return `${num} ${enToJaUnits[unit] || unit}`;
-            }
-            return part.trim();
-          }).filter(p => p).join('・');
+          const m = part.trim().match(/^(\d+)\s*(words?|characters?|paragraphs?)$/i);
+          if (m) {
+            const num = m[1], unit = m[2].toLowerCase().replace(/s$/, '');
+            return `${num} ${enToJaUnits[unit] || unit}`;
+          }
+          return part.trim();
+        }).filter(p => p).join('・');
         if (div.textContent.trim() !== jaLine) div.innerHTML = jaLine;
       });
     };
@@ -590,49 +624,12 @@
   }
 
   function localizeNoteFooterInfoExtra() {
-    function translateTimeUnit(text) {
-      const unitMap = { second: '秒', minute: '分', hour: '時間', day: '日', week: '週間' };
-      text = text.replace(/<\s*(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?)/g, (m, num, unit) =>
-        `< ${num}${unitMap[unit.replace(/s$/, '')] || unit}`);
-      text = text.replace(/(\d+)\s*(seconds?|minutes?|hours?|days?|weeks?)/g, (m, num, unit) =>
-        `${num}${unitMap[unit.replace(/s$/, '')] || unit}`);
-      return text.replace(/less than a minute/i, "1分未満");
-    }
-
-    function convertDateFormat(str) {
-      const dateRegex = /\b(?<wday>Sun|Mon|Tue|Wed|Thu|Fri|Sat|日|月|火|水|木|金|土)\b\s+(?<month>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{1,2}月)\s+(?<day>\d{1,2}),?\s+(?<year>\d{4})/;
-      const match = str.match(dateRegex);
-      if (match && match.groups) {
-        const { wday, month, day, year } = match.groups;
-        const jaWday = enToJaWeek[wday] || jaWeekShort[wday] || wday;
-        const numMonth = enToNumMonth[month] || month.replace('月', '');
-        let jaDate = `${year}/${numMonth}/${day} (${jaWday})`;
-        const timeMatch = str.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/);
-        if (timeMatch) jaDate += ' ' + timeMatch[0];
-        return jaDate;
-      }
-      return str;
-    }
-
-    const customWalk = (node, action) => {
-        if (node.nodeType === Node.TEXT_NODE) {
-            action(node);
-        } else if (node.nodeType === Node.ELEMENT_NODE) {
-            if (node.tagName !== 'SCRIPT' && node.tagName !== 'STYLE') {
-                 Array.from(node.childNodes).forEach(child => customWalk(child, action));
-            }
-        }
-    }
     const translate = () => {
-        document.querySelectorAll('.select-text .mb-1, .select-text > div').forEach(div => {
-            if (div.textContent.match(/\b(words?|characters?|paragraphs?)\b/i)) return;
-            customWalk(div, (node) => {
-                 let newText = convertDateFormat(translateTimeUnit(node.nodeValue));
-                 if (node.nodeValue !== newText) node.nodeValue = newText;
-            });
-        });
+      document.querySelectorAll('.select-text .mb-1, .select-text > div').forEach(div => {
+        if (div.textContent.match(/\b(words?|characters?|paragraphs?)\b/i)) return;
+        walkAndFormatDate(div);
+      });
     }
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
@@ -643,19 +640,17 @@
       "Linked Tags": "リンク済みタグ", "Upload and link file(s)": "ファイルをアップロードしてリンク",
       "Unlinked": "未リンク", "Linked": "リンク済み", "Create & add tag": "タグを作成して追加",
     };
-
     const translate = () => {
       document.querySelectorAll('[data-popover]').forEach(popover => {
         if (popover.querySelector('input[placeholder="Search items to link..."]')) {
-            walkAndTranslate(popover, map);
-            popover.querySelectorAll('[aria-label]').forEach(el => {
-              const label = el.getAttribute('aria-label');
-              if (map[label]) el.setAttribute('aria-label', map[label]);
-            });
+          walkAndTranslate(popover, map);
+          popover.querySelectorAll('[aria-label]').forEach(el => {
+            const label = el.getAttribute('aria-label');
+            if (map[label]) el.setAttribute('aria-label', map[label]);
+          });
         }
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
@@ -666,34 +661,29 @@
       "Link tags, notes or files": "タグ・ノート・ファイルをリンク",
       "Create & add tag": "タグを作成して追加",
     };
-
     const translate = () => {
       const titleBar = document.querySelector('#editor-title-bar');
       if (titleBar) {
-          walkAndTranslate(titleBar, map);
-          titleBar.querySelectorAll('input[placeholder]').forEach(input => {
-              if (map[input.placeholder]) input.placeholder = map[input.placeholder];
-          });
-          titleBar.querySelectorAll('[aria-label], [title]').forEach(el => {
-              const attr = el.hasAttribute('aria-label') ? 'aria-label' : 'title';
-              const val = el.getAttribute(attr);
-              if (map[val]) el.setAttribute(attr, map[val]);
-          });
+        walkAndTranslate(titleBar, map);
+        titleBar.querySelectorAll('input[placeholder]').forEach(input => {
+          if (map[input.placeholder]) input.placeholder = map[input.placeholder];
+        });
+        titleBar.querySelectorAll('[aria-label], [title]').forEach(el => {
+          const attr = el.hasAttribute('aria-label') ? 'aria-label' : 'title';
+          const val = el.getAttribute(attr);
+          if (map[val]) el.setAttribute(attr, map[val]);
+        });
       }
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
 
   function localizeMoveToTrashModal() {
     const map = {
-      "Move to Trash": "ゴミ箱に移動",
-      "to the trash?": "をゴミ箱に移動してもよろしいですか？",
-      "Cancel": "キャンセル",
-      "Confirm": "確認",
+      "Move to Trash": "ゴミ箱に移動", "to the trash?": "をゴミ箱に移動してもよろしいですか？",
+      "Cancel": "キャンセル", "Confirm": "確認",
     };
-
     const translate = () => {
       document.querySelectorAll('.sk-modal-content').forEach(modal => {
         const titleEl = modal.querySelector('.font-bold.text-lg');
@@ -710,7 +700,6 @@
         });
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
@@ -720,31 +709,25 @@
       "Starred": "お気に入り", "Archived": "アーカイブ", "Trash": "ゴミ箱",
       "Untagged": "タグなし", "Files": "ファイル", "Notes": "ノート一覧"
     };
-
     const translate = () => {
       document.querySelectorAll(
         '.section-title-bar-header .text-2xl.font-semibold.text-text, .section-title-bar-header .md\\:text-lg.font-semibold.text-text'
       ).forEach(el => walkAndTranslate(el, map));
     };
-
     const observer = new MutationObserver(() => setTimeout(translate, 0));
     observer.observe(document.body, { childList: true, subtree: true, characterData: true });
     translate();
   }
 
   function localizeEmptyTagsMessage() {
-    const map = {
-      "No tags or folders. Create one using the add button above.": "タグやフォルダはありません。上の追加ボタンで作成してください。"
-    };
-
+    const map = { "No tags or folders. Create one using the add button above.": "タグやフォルダはありません。上の追加ボタンで作成してください。" };
     const translate = () => {
       document.querySelectorAll('.section-title-bar + div').forEach(div => {
-          if (div.previousElementSibling?.textContent.includes('Tags') || div.previousElementSibling?.textContent.includes('タグ')) {
-              walkAndTranslate(div, map);
-          }
+        if (div.previousElementSibling?.textContent.includes('Tags') || div.previousElementSibling?.textContent.includes('タグ')) {
+          walkAndTranslate(div, map);
+        }
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
@@ -755,27 +738,27 @@
       "Sign in or register to sync your notes to your other devices with end-to-end encryption.": "サインインまたは登録すると、エンドツーエンド暗号化で他のデバイスとノートを同期できます。",
       "Open Account menu": "アカウントメニューを開く"
     };
-
     const translate = () => {
       document.querySelectorAll('h1').forEach(h1 => {
         if (h1.textContent.trim() === "Data not backed up") {
-            const container = h1.closest('div');
-            if (container) walkAndTranslate(container, map);
+          const container = h1.closest('div');
+          if (container) walkAndTranslate(container, map);
         }
       });
     };
-
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
   }
 
-  // --- Main execution ---
+  // --- スクリプトのメイン実行部 ---
+
+  // IME修正とスタイル適用を監視
   new MutationObserver(() => {
     applyEditorStyle();
     setupTitleField();
   }).observe(document.body, { childList: true, subtree: true });
 
-  // Call all localization functions
+  // すべての日本語化関数を呼び出し
   localizeDisplayOptions();
   localizeSidebarViews();
   localizeTagsSection();
@@ -788,6 +771,7 @@
   localizeAccountMenu();
   localizeQuickSettingsMenu();
   localizePreferencesDialog();
+  localizeItemsColumn();
   localizeTagContextMenu();
   localizeStatsLine();
   localizeNoteFooterInfoExtra();
