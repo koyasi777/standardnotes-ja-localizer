@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.9.2
+// @version      1.9.5
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standardnotes-ja-localizer
 // @author       koyasi777
@@ -47,21 +47,35 @@
 
   /**
    * 英語の日付書式を日本語の「YYYY/MM/DD (曜)」形式に変換します。
+   * 元の文字列にラベル等が含まれていても、日付部分のみを置換します。
    * @param {string} str - 変換する日付文字列。
    * @returns {string} 変換後の日付文字列。
    */
   function convertDateFormat(str) {
     if (!str || typeof str !== 'string') return str;
-    const dateRegex = /\b(?<wday>Sun|Mon|Tue|Wed|Thu|Fri|Sat|日|月|火|水|木|金|土)\s+(?<month>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{1,2}月)\s+(?<day>\d{1,2}),?\s+(?<year>\d{4})/;
+
+    // 複数の日付形式に対応 ("Mon, Apr 29, 2024", "Thu Jun 26 2025")
+    const dateRegex = /\b(?<wday>Sun|Mon|Tue|Wed|Thu|Fri|Sat|日|月|火|水|木|金|土)\s*,?\s+(?<month>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|[0-9]{1,2}月)\s+(?<day>\d{1,2}),?\s+(?<year>\d{4})/;
     const match = str.match(dateRegex);
+
     if (match && match.groups) {
       const { wday, month, day, year } = match.groups;
       const jaWday = enToJaWeek[wday] || jaWeekShort[wday] || wday;
       const numMonth = enToNumMonth[month] || month.replace('月', '');
-      let jaDate = `${year}/${numMonth}/${day} (${jaWday})`;
-      const timeMatch = str.match(/\b\d{1,2}:\d{2}(?::\d{2})?\b/);
-      if (timeMatch) jaDate += ' ' + timeMatch[0];
-      return jaDate;
+      let jaDate = `${year}/${String(numMonth).padStart(2, '0')}/${String(day).padStart(2, '0')} (${jaWday})`;
+
+      // 時間部分をマッチング
+      const timeMatch = str.match(/\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\b/);
+      let originalFullMatch = match[0];
+
+      if (timeMatch) {
+        // 日付のマッチの終わりから時間のマッチの終わりまでを置換対象とする
+        const endIndex = timeMatch.index + timeMatch[0].length;
+        originalFullMatch = str.substring(match.index, endIndex);
+        jaDate += ' ' + timeMatch[0].trim();
+      }
+
+      return str.replace(originalFullMatch, jaDate);
     }
     return str;
   }
@@ -555,7 +569,7 @@
                     const [, year, month, day, dayOfWeek, time] = match;
                     const newText = `${translatedPrefix} ${year}/${month}/${day} (${dayOfWeek}) ${time}`;
                     if (span.textContent !== newText) {
-                         span.textContent = newText;
+                        span.textContent = newText;
                     }
                 }
             }
@@ -589,7 +603,7 @@
           popover.querySelectorAll('[aria-label]').forEach(el => {
             const label = el.getAttribute('aria-label');
             if (map[label] && el.getAttribute('aria-label') !== map[label]) {
-              el.setAttribute('aria-label', map[label]);
+               el.setAttribute('aria-label', map[label]);
             }
           });
         }
@@ -655,11 +669,21 @@
     translate();
   }
 
+  /**
+   * [更新] エディタ上部のタイトルバーと競合ボタンを日本語化します。
+   */
   function localizeEditorTitleBar() {
     const map = {
       "Link tags, notes, files...": "タグ・ノート・ファイルをリンク...",
       "Link tags, notes or files": "タグ・ノート・ファイルをリンク",
       "Create & add tag": "タグを作成して追加",
+      "Focus input to add a link (Ctrl+Alt+T)": "リンクを追加 (Ctrl+Alt+T)",
+      "Go to items list": "ノート一覧へ移動",
+      "Linked items panel": "リンク済みアイテムパネル",
+      "Change note type (Ctrl+Shift+/)": "ノートタイプを変更 (Ctrl+Shift+/)",
+      "Pin note (Ctrl+Shift+P)": "ノートをピン留め (Ctrl+Shift+P)",
+      "Pin selected notes": "選択したノートをピン留め",
+      "Note options menu": "ノートオプションメニュー",
     };
     const translate = () => {
       const titleBar = document.querySelector('#editor-title-bar');
@@ -673,6 +697,19 @@
           const val = el.getAttribute(attr);
           if (map[val]) el.setAttribute(attr, map[val]);
         });
+
+        // Handle conflict button
+        const conflictButton = titleBar.querySelector('#conflict-resolution-button');
+        if (conflictButton) {
+            const textNode = Array.from(conflictButton.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+            if (textNode) {
+                const originalText = textNode.nodeValue.trim();
+                const match = originalText.match(/(\d+)\s+conflict(s?)/);
+                if (match) {
+                    textNode.nodeValue = ` ${match[1]}件の競合`;
+                }
+            }
+        }
       }
     };
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
@@ -750,6 +787,120 @@
     translate();
   }
 
+  /**
+   * [更新] 競合解決モーダルと関連ポップオーバーを日本語化します。
+   */
+  function localizeConflictResolutionModal() {
+    const map = {
+      "Resolve conflicts": "競合を解決",
+      "Cancel": "キャンセル",
+      "List": "リスト",
+      "Preview": "プレビュー",
+      "Current version": "現在のバージョン",
+      "Preview Mode": "プレビューモード",
+      "Diff Mode": "差分モード",
+      // Main button might have line breaks. Use a key that matches its normalized textContent.
+      "Keep selected, trash others": "選択バージョンを保持し、他を破棄",
+      // Popover menu items
+      "Move others to trash": "他をゴミ箱に移動",
+      "Only the selected version will be kept; others will be moved to trash.": "選択したバージョンのみが保持され、他はゴミ箱に移動します。",
+      "Delete others permanently": "他を完全に削除",
+      "Only the selected version will be kept; others will be deleted permanently.": "選択したバージョンのみが保持され、他は完全に削除されます。",
+    };
+
+    const translate = () => {
+      // --- 1. Translate the main conflict resolution dialog ---
+      const dialogs = Array.from(document.querySelectorAll('div[data-dialog][role="dialog"]'))
+        .filter(d => {
+          const header = d.querySelector('div[data-mobile-modal-header] span, .md\\:text-lg span');
+          return header && header.textContent.trim() === "Resolve conflicts";
+        });
+
+      for (const dialog of dialogs) {
+        if (dialog.dataset.localizedFull === 'conflict-resolution') continue;
+
+        walkAndTranslate(dialog, map);
+
+        // --- 2. Translate version list details ---
+        dialog.querySelectorAll('button.flex.w-full.select-none').forEach(button => {
+          const versionTitle = button.querySelector('.font-semibold');
+          if (versionTitle) {
+            if (versionTitle.textContent.trim() !== "Current version" && !versionTitle.textContent.includes("バージョン")) {
+              versionTitle.textContent = versionTitle.textContent.replace(/Version (\d+)/, 'バージョン $1');
+            }
+          }
+          const detailsContainer = button.querySelector('.w-full.text-sm.text-neutral');
+          if (detailsContainer) {
+            walkAndFormatDate(detailsContainer);
+          }
+        });
+
+        // --- 3. Specifically translate the main action button ---
+        const mainButton = dialog.querySelector('div[role="toolbar"] button:first-child');
+        if (mainButton) {
+            // Normalize whitespace and line breaks to a single space for robust matching.
+            const buttonText = mainButton.textContent.replace(/\s+/g, ' ').trim();
+            // The text might include a comma depending on the exact UI state.
+            if (buttonText === "Keep selected, trash others") {
+                mainButton.textContent = map["Keep selected, trash others"];
+            }
+        }
+
+        dialog.dataset.localizedFull = 'conflict-resolution';
+      }
+
+      // --- 4. Translate the action popover (which is in a portal) ---
+      document.querySelectorAll('div[id^="portal"] div[role="listbox"]').forEach(listbox => {
+        const firstOptionText = listbox.querySelector('div[role="option"] div.font-bold');
+        if (firstOptionText && firstOptionText.textContent.includes("Move others to trash")) {
+            if (listbox.dataset.localized === 'conflict-action-popover') return;
+            walkAndTranslate(listbox, map);
+            listbox.dataset.localized = 'conflict-action-popover';
+        }
+      });
+    };
+
+    const observer = new MutationObserver(translate);
+    observer.observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
+  /**
+   * [新規] 競合解決の最終確認モーダルを日本語化します。
+   */
+  function localizeConflictConfirmationModal() {
+    const map = {
+        "Keep only selected versions?": "選択したバージョンのみを保持しますか？",
+        "This will keep only the selected versions and move the other versions to the trash. Are you sure?": "これにより、選択したバージョンのみが保持され、他のバージョンはゴミ箱に移動します。よろしいですか？",
+        "This will keep only the selected versions and delete the other versions permanently. Are you sure?": "これにより、選択したバージョンのみが保持され、他のバージョンは完全に削除されます。よろしいですか？",
+        "Cancel": "キャンセル",
+        "Confirm": "確認",
+    };
+
+    const translate = () => {
+        document.querySelectorAll('.sk-modal-content .sn-component .sk-panel').forEach(panel => {
+            const titleEl = panel.querySelector('.font-bold.text-lg');
+            if (titleEl?.textContent.trim() === "Keep only selected versions?") {
+                if(panel.dataset.localized === 'conflict-confirm') return;
+
+                walkAndTranslate(panel, map);
+
+                const p = panel.querySelector('p.sk-p');
+                if (p) {
+                    const originalText = p.textContent.trim();
+                    if (map[originalText]) {
+                        p.textContent = map[originalText];
+                    }
+                }
+                panel.dataset.localized = 'conflict-confirm';
+            }
+        });
+    };
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
+  }
+
+
   // --- スクリプトのメイン実行部 ---
 
   // IME修正とスタイル適用を監視
@@ -781,5 +932,7 @@
   localizeItemsListTitle();
   localizeEmptyTagsMessage();
   localizeDataNotBackedUpWarning();
+  localizeConflictResolutionModal();
+  localizeConflictConfirmationModal();
 
 })();
