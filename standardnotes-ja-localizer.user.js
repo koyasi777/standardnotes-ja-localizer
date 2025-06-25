@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.9.5
+// @version      1.9.6
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standardnotes-ja-localizer
 // @author       koyasi777
@@ -900,6 +900,37 @@
     translate();
   }
 
+  /**
+   * [新規] エディタ幅設定モーダルを日本語化します。
+   */
+  function localizeEditorWidthModal() {
+      const map = {
+          "Set globally": "グローバルに設定",
+          "Narrow": "狭く",
+          "Wide": "広く",
+          "Dynamic": "ダイナミック",
+          "Full width": "全幅",
+          "Cancel": "キャンセル",
+          "Apply": "適用",
+      };
+
+      const translate = () => {
+          document.querySelectorAll('div[data-dialog][role="dialog"]').forEach(dialog => {
+              // このダイアログを特定するユニークな要素を探す
+              const fullWidthRadio = dialog.querySelector('input[value="FullWidth"]');
+              if (!fullWidthRadio) return;
+
+              if(dialog.dataset.localized === 'editor-width') return;
+
+              walkAndTranslate(dialog, map);
+
+              dialog.dataset.localized = 'editor-width';
+          });
+      };
+      new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+      translate();
+  }
+
 
   // --- スクリプトのメイン実行部 ---
 
@@ -934,5 +965,5 @@
   localizeDataNotBackedUpWarning();
   localizeConflictResolutionModal();
   localizeConflictConfirmationModal();
-
+  localizeEditorWidthModal();
 })();
