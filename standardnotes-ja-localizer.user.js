@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.9.6
+// @version      1.9.7
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standardnotes-ja-localizer
 // @author       koyasi777
@@ -603,7 +603,7 @@
           popover.querySelectorAll('[aria-label]').forEach(el => {
             const label = el.getAttribute('aria-label');
             if (map[label] && el.getAttribute('aria-label') !== map[label]) {
-               el.setAttribute('aria-label', map[label]);
+                el.setAttribute('aria-label', map[label]);
             }
           });
         }
@@ -716,26 +716,52 @@
     translate();
   }
 
+  /**
+   * [更新済み] ゴミ箱への移動確認モーダルを日本語化します。
+   * シンプルな確認メッセージと、ノートタイトルを含む動的なメッセージの両方に対応します。
+   */
   function localizeMoveToTrashModal() {
     const map = {
-      "Move to Trash": "ゴミ箱に移動", "to the trash?": "をゴミ箱に移動してもよろしいですか？",
-      "Cancel": "キャンセル", "Confirm": "確認",
+        "Move to Trash": "ゴミ箱に移動",
+        "to the trash?": "をゴミ箱に移動してもよろしいですか？",
+        "Are you sure you want to move this note to the trash?": "このノートをゴミ箱に移動してもよろしいですか？",
+        "Cancel": "キャンセル",
+        "Confirm": "確認",
     };
     const translate = () => {
-      document.querySelectorAll('.sk-modal-content').forEach(modal => {
-        const titleEl = modal.querySelector('.font-bold.text-lg');
-        if (titleEl?.textContent.trim() !== "Move to Trash") return;
+        document.querySelectorAll('.sk-modal-content').forEach(modal => {
+            const titleEl = modal.querySelector('.font-bold.text-lg');
+            // モーダルのタイトルが英語または日本語の「ゴミ箱に移動」であるかを確認
+            if (!titleEl || (titleEl.textContent.trim() !== "Move to Trash" && titleEl.textContent.trim() !== "ゴミ箱に移動")) {
+                return;
+            }
 
-        walkAndTranslate(modal, map);
+            // walkAndTranslateで静的なテキスト（タイトル、ボタン、シンプルな確認文）を翻訳
+            walkAndTranslate(modal, map);
 
-        modal.querySelectorAll('.sk-p').forEach(p => {
-          const raw = p.textContent;
-          const m = raw.match(/^Are you sure you want to move ['‘’「」](.+)['‘’「」]/);
-          if (m) {
-            p.textContent = `「${m[1]}」${map["to the trash?"]}`;
-          }
+            // ノートタイトルや件数を含む動的なテキストを処理
+            modal.querySelectorAll('p.sk-p').forEach(p => {
+                const rawText = p.textContent.trim();
+
+                // 既に翻訳済みの場合はスキップ
+                if (rawText.includes(map["to the trash?"]) || rawText === map["Are you sure you want to move this note to the trash?"]) {
+                    return;
+                }
+
+                // ノート名が1つ含まれる場合のパターン
+                const singleNoteMatch = rawText.match(/^Are you sure you want to move ['‘’](.+)['‘’] to the trash\?$/);
+                if (singleNoteMatch) {
+                    p.textContent = `「${singleNoteMatch[1]}」${map["to the trash?"]}`;
+                    return;
+                }
+
+                // 複数のノートが含まれる場合のパターン
+                const multipleNotesMatch = rawText.match(/^Are you sure you want to move (\d+) notes to the trash\?$/);
+                if (multipleNotesMatch) {
+                    p.textContent = `${multipleNotesMatch[1]}個のノート${map["to the trash?"]}`;
+                }
+            });
         });
-      });
     };
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
@@ -838,12 +864,12 @@
         // --- 3. Specifically translate the main action button ---
         const mainButton = dialog.querySelector('div[role="toolbar"] button:first-child');
         if (mainButton) {
-            // Normalize whitespace and line breaks to a single space for robust matching.
-            const buttonText = mainButton.textContent.replace(/\s+/g, ' ').trim();
-            // The text might include a comma depending on the exact UI state.
-            if (buttonText === "Keep selected, trash others") {
-                mainButton.textContent = map["Keep selected, trash others"];
-            }
+          // Normalize whitespace and line breaks to a single space for robust matching.
+          const buttonText = mainButton.textContent.replace(/\s+/g, ' ').trim();
+          // The text might include a comma depending on the exact UI state.
+          if (buttonText === "Keep selected, trash others") {
+              mainButton.textContent = map["Keep selected, trash others"];
+          }
         }
 
         dialog.dataset.localizedFull = 'conflict-resolution';
@@ -905,27 +931,27 @@
    */
   function localizeEditorWidthModal() {
       const map = {
-          "Set globally": "グローバルに設定",
-          "Narrow": "狭く",
-          "Wide": "広く",
-          "Dynamic": "ダイナミック",
-          "Full width": "全幅",
-          "Cancel": "キャンセル",
-          "Apply": "適用",
+            "Set globally": "グローバルに設定",
+            "Narrow": "狭く",
+            "Wide": "広く",
+            "Dynamic": "ダイナミック",
+            "Full width": "全幅",
+            "Cancel": "キャンセル",
+            "Apply": "適用",
       };
 
       const translate = () => {
-          document.querySelectorAll('div[data-dialog][role="dialog"]').forEach(dialog => {
-              // このダイアログを特定するユニークな要素を探す
-              const fullWidthRadio = dialog.querySelector('input[value="FullWidth"]');
-              if (!fullWidthRadio) return;
+            document.querySelectorAll('div[data-dialog][role="dialog"]').forEach(dialog => {
+                // このダイアログを特定するユニークな要素を探す
+                const fullWidthRadio = dialog.querySelector('input[value="FullWidth"]');
+                if (!fullWidthRadio) return;
 
-              if(dialog.dataset.localized === 'editor-width') return;
+                if(dialog.dataset.localized === 'editor-width') return;
 
-              walkAndTranslate(dialog, map);
+                walkAndTranslate(dialog, map);
 
-              dialog.dataset.localized = 'editor-width';
-          });
+                dialog.dataset.localized = 'editor-width';
+            });
       };
       new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
       translate();
