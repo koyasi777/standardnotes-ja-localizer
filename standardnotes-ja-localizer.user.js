@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Standard Notes 日本語化 & IME修正
-// @version      1.9.7
+// @version      1.9.8
 // @description  Standard Notesを完全に日本語化し、FirefoxでのIME入力バグを修正します。
 // @namespace    https://github.com/koyasi777/standardnotes-ja-localizer
 // @author       koyasi777
@@ -535,52 +535,52 @@
    */
   function localizeItemsColumn() {
     const map = {
-        "Display options menu": "表示オプションメニュー",
-        "Create a new note in the selected tag (Alt+Shift+N)": "選択中のタグに新規ノートを作成 (Alt+Shift+N)",
-        "Open navigation menu": "ナビゲーションメニューを開く",
-        "Notes & Files": "ノートとファイル"
+      "Display options menu": "表示オプションメニュー",
+      "Create a new note in the selected tag (Alt+Shift+N)": "選択中のタグに新規ノートを作成 (Alt+Shift+N)",
+      "Open navigation menu": "ナビゲーションメニューを開く",
+      "Notes & Files": "ノートとファイル"
     };
     const modifiedPrefix = "Modified";
     const translatedPrefix = "更新日時:";
 
     const translate = () => {
-        const itemsColumn = document.getElementById('items-column');
-        if (!itemsColumn) return;
+      const itemsColumn = document.getElementById('items-column');
+      if (!itemsColumn) return;
 
-        // カラム自体と内部のボタンのaria-labelを翻訳
-        const mainLabel = itemsColumn.getAttribute('aria-label');
-        if (map[mainLabel] && mainLabel !== map[mainLabel]) {
-            itemsColumn.setAttribute('aria-label', map[mainLabel]);
+      // カラム自体と内部のボタンのaria-labelを翻訳
+      const mainLabel = itemsColumn.getAttribute('aria-label');
+      if (map[mainLabel] && mainLabel !== map[mainLabel]) {
+        itemsColumn.setAttribute('aria-label', map[mainLabel]);
+      }
+      itemsColumn.querySelectorAll('[aria-label]').forEach(el => {
+        const label = el.getAttribute('aria-label');
+        if (map[label] && el.getAttribute('aria-label') !== map[label]) {
+          el.setAttribute('aria-label', map[label]);
         }
-        itemsColumn.querySelectorAll('[aria-label]').forEach(el => {
-            const label = el.getAttribute('aria-label');
-            if (map[label] && el.getAttribute('aria-label') !== map[label]) {
-                el.setAttribute('aria-label', map[label]);
-            }
-        });
+      });
 
-        // ノートリスト内の更新日時を翻訳
-        itemsColumn.querySelectorAll('.content-list-item .leading-1\\.4 > span').forEach(span => {
-            const originalText = span.textContent.trim();
-            if (originalText.startsWith(modifiedPrefix)) {
-                const datePart = originalText.substring(modifiedPrefix.length).trim();
-                const match = datePart.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(.)曜日\s+(\d{1,2}:\d{2})$/);
-                if (match) {
-                    const [, year, month, day, dayOfWeek, time] = match;
-                    const newText = `${translatedPrefix} ${year}/${month}/${day} (${dayOfWeek}) ${time}`;
-                    if (span.textContent !== newText) {
-                        span.textContent = newText;
-                    }
-                }
+      // ノートリスト内の更新日時を翻訳
+      itemsColumn.querySelectorAll('.content-list-item .leading-1\\.4 > span').forEach(span => {
+        const originalText = span.textContent.trim();
+        if (originalText.startsWith(modifiedPrefix)) {
+          const datePart = originalText.substring(modifiedPrefix.length).trim();
+          const match = datePart.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日(.)曜日\s+(\d{1,2}:\d{2})$/);
+          if (match) {
+            const [, year, month, day, dayOfWeek, time] = match;
+            const newText = `${translatedPrefix} ${year}/${month}/${day} (${dayOfWeek}) ${time}`;
+            if (span.textContent !== newText) {
+              span.textContent = newText;
             }
-        });
+          }
+        }
+      });
     };
 
     const observer = new MutationObserver(translate);
     observer.observe(document.body, {
-        childList: true,
-        subtree: true,
-        characterData: true
+      childList: true,
+      subtree: true,
+      characterData: true
     });
     translate();
   }
@@ -603,7 +603,7 @@
           popover.querySelectorAll('[aria-label]').forEach(el => {
             const label = el.getAttribute('aria-label');
             if (map[label] && el.getAttribute('aria-label') !== map[label]) {
-                el.setAttribute('aria-label', map[label]);
+              el.setAttribute('aria-label', map[label]);
             }
           });
         }
@@ -701,14 +701,14 @@
         // Handle conflict button
         const conflictButton = titleBar.querySelector('#conflict-resolution-button');
         if (conflictButton) {
-            const textNode = Array.from(conflictButton.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
-            if (textNode) {
-                const originalText = textNode.nodeValue.trim();
-                const match = originalText.match(/(\d+)\s+conflict(s?)/);
-                if (match) {
-                    textNode.nodeValue = ` ${match[1]}件の競合`;
-                }
+          const textNode = Array.from(conflictButton.childNodes).find(node => node.nodeType === Node.TEXT_NODE);
+          if (textNode) {
+            const originalText = textNode.nodeValue.trim();
+            const match = originalText.match(/(\d+)\s+conflict(s?)/);
+            if (match) {
+              textNode.nodeValue = ` ${match[1]}件の競合`;
             }
+          }
         }
       }
     };
@@ -722,46 +722,46 @@
    */
   function localizeMoveToTrashModal() {
     const map = {
-        "Move to Trash": "ゴミ箱に移動",
-        "to the trash?": "をゴミ箱に移動してもよろしいですか？",
-        "Are you sure you want to move this note to the trash?": "このノートをゴミ箱に移動してもよろしいですか？",
-        "Cancel": "キャンセル",
-        "Confirm": "確認",
+      "Move to Trash": "ゴミ箱に移動",
+      "to the trash?": "をゴミ箱に移動してもよろしいですか？",
+      "Are you sure you want to move this note to the trash?": "このノートをゴミ箱に移動してもよろしいですか？",
+      "Cancel": "キャンセル",
+      "Confirm": "確認",
     };
     const translate = () => {
-        document.querySelectorAll('.sk-modal-content').forEach(modal => {
-            const titleEl = modal.querySelector('.font-bold.text-lg');
-            // モーダルのタイトルが英語または日本語の「ゴミ箱に移動」であるかを確認
-            if (!titleEl || (titleEl.textContent.trim() !== "Move to Trash" && titleEl.textContent.trim() !== "ゴミ箱に移動")) {
-                return;
-            }
+      document.querySelectorAll('.sk-modal-content').forEach(modal => {
+        const titleEl = modal.querySelector('.font-bold.text-lg');
+        // モーダルのタイトルが英語または日本語の「ゴミ箱に移動」であるかを確認
+        if (!titleEl || (titleEl.textContent.trim() !== "Move to Trash" && titleEl.textContent.trim() !== "ゴミ箱に移動")) {
+          return;
+        }
 
-            // walkAndTranslateで静的なテキスト（タイトル、ボタン、シンプルな確認文）を翻訳
-            walkAndTranslate(modal, map);
+        // walkAndTranslateで静的なテキスト（タイトル、ボタン、シンプルな確認文）を翻訳
+        walkAndTranslate(modal, map);
 
-            // ノートタイトルや件数を含む動的なテキストを処理
-            modal.querySelectorAll('p.sk-p').forEach(p => {
-                const rawText = p.textContent.trim();
+        // ノートタイトルや件数を含む動的なテキストを処理
+        modal.querySelectorAll('p.sk-p').forEach(p => {
+          const rawText = p.textContent.trim();
 
-                // 既に翻訳済みの場合はスキップ
-                if (rawText.includes(map["to the trash?"]) || rawText === map["Are you sure you want to move this note to the trash?"]) {
-                    return;
-                }
+          // 既に翻訳済みの場合はスキップ
+          if (rawText.includes(map["to the trash?"]) || rawText === map["Are you sure you want to move this note to the trash?"]) {
+            return;
+          }
 
-                // ノート名が1つ含まれる場合のパターン
-                const singleNoteMatch = rawText.match(/^Are you sure you want to move ['‘’](.+)['‘’] to the trash\?$/);
-                if (singleNoteMatch) {
-                    p.textContent = `「${singleNoteMatch[1]}」${map["to the trash?"]}`;
-                    return;
-                }
+          // ノート名が1つ含まれる場合のパターン
+          const singleNoteMatch = rawText.match(/^Are you sure you want to move ['‘’](.+)['‘’] to the trash\?$/);
+          if (singleNoteMatch) {
+            p.textContent = `「${singleNoteMatch[1]}」${map["to the trash?"]}`;
+            return;
+          }
 
-                // 複数のノートが含まれる場合のパターン
-                const multipleNotesMatch = rawText.match(/^Are you sure you want to move (\d+) notes to the trash\?$/);
-                if (multipleNotesMatch) {
-                    p.textContent = `${multipleNotesMatch[1]}個のノート${map["to the trash?"]}`;
-                }
-            });
+          // 複数のノートが含まれる場合のパターン
+          const multipleNotesMatch = rawText.match(/^Are you sure you want to move (\d+) notes to the trash\?$/);
+          if (multipleNotesMatch) {
+            p.textContent = `${multipleNotesMatch[1]}個のノート${map["to the trash?"]}`;
+          }
         });
+      });
     };
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
@@ -868,7 +868,7 @@
           const buttonText = mainButton.textContent.replace(/\s+/g, ' ').trim();
           // The text might include a comma depending on the exact UI state.
           if (buttonText === "Keep selected, trash others") {
-              mainButton.textContent = map["Keep selected, trash others"];
+            mainButton.textContent = map["Keep selected, trash others"];
           }
         }
 
@@ -879,9 +879,9 @@
       document.querySelectorAll('div[id^="portal"] div[role="listbox"]').forEach(listbox => {
         const firstOptionText = listbox.querySelector('div[role="option"] div.font-bold');
         if (firstOptionText && firstOptionText.textContent.includes("Move others to trash")) {
-            if (listbox.dataset.localized === 'conflict-action-popover') return;
-            walkAndTranslate(listbox, map);
-            listbox.dataset.localized = 'conflict-action-popover';
+          if (listbox.dataset.localized === 'conflict-action-popover') return;
+          walkAndTranslate(listbox, map);
+          listbox.dataset.localized = 'conflict-action-popover';
         }
       });
     };
@@ -896,31 +896,31 @@
    */
   function localizeConflictConfirmationModal() {
     const map = {
-        "Keep only selected versions?": "選択したバージョンのみを保持しますか？",
-        "This will keep only the selected versions and move the other versions to the trash. Are you sure?": "これにより、選択したバージョンのみが保持され、他のバージョンはゴミ箱に移動します。よろしいですか？",
-        "This will keep only the selected versions and delete the other versions permanently. Are you sure?": "これにより、選択したバージョンのみが保持され、他のバージョンは完全に削除されます。よろしいですか？",
-        "Cancel": "キャンセル",
-        "Confirm": "確認",
+      "Keep only selected versions?": "選択したバージョンのみを保持しますか？",
+      "This will keep only the selected versions and move the other versions to the trash. Are you sure?": "これにより、選択したバージョンのみが保持され、他のバージョンはゴミ箱に移動します。よろしいですか？",
+      "This will keep only the selected versions and delete the other versions permanently. Are you sure?": "これにより、選択したバージョンのみが保持され、他のバージョンは完全に削除されます。よろしいですか？",
+      "Cancel": "キャンセル",
+      "Confirm": "確認",
     };
 
     const translate = () => {
-        document.querySelectorAll('.sk-modal-content .sn-component .sk-panel').forEach(panel => {
-            const titleEl = panel.querySelector('.font-bold.text-lg');
-            if (titleEl?.textContent.trim() === "Keep only selected versions?") {
-                if(panel.dataset.localized === 'conflict-confirm') return;
+      document.querySelectorAll('.sk-modal-content .sn-component .sk-panel').forEach(panel => {
+        const titleEl = panel.querySelector('.font-bold.text-lg');
+        if (titleEl?.textContent.trim() === "Keep only selected versions?") {
+          if(panel.dataset.localized === 'conflict-confirm') return;
 
-                walkAndTranslate(panel, map);
+          walkAndTranslate(panel, map);
 
-                const p = panel.querySelector('p.sk-p');
-                if (p) {
-                    const originalText = p.textContent.trim();
-                    if (map[originalText]) {
-                        p.textContent = map[originalText];
-                    }
-                }
-                panel.dataset.localized = 'conflict-confirm';
+          const p = panel.querySelector('p.sk-p');
+          if (p) {
+            const originalText = p.textContent.trim();
+            if (map[originalText]) {
+              p.textContent = map[originalText];
             }
-        });
+          }
+          panel.dataset.localized = 'conflict-confirm';
+        }
+      });
     };
     new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
     translate();
@@ -955,6 +955,58 @@
       };
       new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
       translate();
+  }
+
+  /**
+   * [新規] キーボードショートカットのヘルプモーダルを日本語化します。
+   */
+  function localizeKeyboardShortcutsModal() {
+    const map = {
+      "Keyboard shortcuts": "キーボードショートカット",
+      "Cancel": "キャンセル",
+      "Current note": "現在のノート",
+      "Pin current note": "現在のノートをピン留め",
+      "Star current note": "現在のノートにスターを付ける",
+      "Open note history": "ノートの履歴を開く",
+      "Change editor width": "エディタの幅を変更",
+      "Change note type": "ノートタイプを変更",
+      "Link tags, notes, files": "タグ、ノート、ファイルをリンク",
+      "Notes list": "ノート一覧",
+      "Go to next item": "次の項目へ移動",
+      "Go to previous item": "前の項目へ移動",
+      "General": "一般",
+      "Toggle focus mode": "フォーカスモードの切替",
+      "Toggle notes panel": "ノートパネルの切替",
+      "Toggle tags panel": "タグパネルの切替",
+      "Create new tag": "新規タグを作成",
+      "Open preferences": "設定を開く",
+      "Toggle keyboard shortcuts help": "ショートカットヘルプの表示切替",
+      "Toggle dark mode": "ダークモードの切替",
+      "Create new note": "新規ノートを作成",
+      "Toggle global search": "グローバル検索の切替",
+      "Select all items": "すべての項目を選択",
+    };
+
+    const translate = () => {
+      document.querySelectorAll('div[data-dialog][role="dialog"]').forEach(dialog => {
+        // このダイアログを特定するために、特徴的なヘッダーテキストを探す
+        const header = dialog.querySelector('[data-mobile-modal-header="true"] span, .md\\:text-lg span');
+        // ヘッダーテキストが "Keyboard shortcuts" または既に翻訳済みの "キーボードショートカット" であることを確認
+        const headerText = header?.textContent.trim();
+        if (headerText !== "Keyboard shortcuts" && headerText !== "キーボードショートカット") {
+            return;
+        }
+
+        if (dialog.dataset.localized === 'keyboard-shortcuts') return;
+
+        walkAndTranslate(dialog, map);
+
+        dialog.dataset.localized = 'keyboard-shortcuts';
+      });
+    };
+
+    new MutationObserver(translate).observe(document.body, { childList: true, subtree: true });
+    translate();
   }
 
 
@@ -992,4 +1044,5 @@
   localizeConflictResolutionModal();
   localizeConflictConfirmationModal();
   localizeEditorWidthModal();
+  localizeKeyboardShortcutsModal();
 })();
