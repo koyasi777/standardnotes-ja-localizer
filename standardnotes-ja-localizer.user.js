@@ -1041,7 +1041,7 @@
   localizeItemsListTitle();
   localizeEmptyTagsMessage();
   localizeDataNotBackedUpWarning();
-  localizeConflictResolutionModal();
+  // localizeConflictResolutionModal(); // エラーになるのでコメントアウトする
   localizeConflictConfirmationModal();
   localizeEditorWidthModal();
   localizeKeyboardShortcutsModal();
